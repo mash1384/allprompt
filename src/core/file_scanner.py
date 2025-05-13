@@ -190,6 +190,29 @@ def is_binary_file(file_path: Path) -> bool:
         # 파일 크기가 0이면 텍스트 파일로 간주
         if file_path.stat().st_size == 0:
             return False
+        
+        # 일반적인 바이너리 파일 확장자 목록
+        binary_extensions = {
+            # 실행 파일 및 라이브러리
+            '.exe', '.dll', '.so', '.dylib', '.bin', '.o', '.obj',
+            # 압축 파일
+            '.zip', '.gz', '.tar', '.rar', '.7z', '.xz', '.bz2',
+            # 이미지 파일
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.ico', '.webp',
+            # 오디오 파일
+            '.mp3', '.wav', '.ogg', '.flac', '.aac', '.wma',
+            # 비디오 파일
+            '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm',
+            # 문서 및 기타 바이너리 파일
+            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+            '.class', '.pyc', '.pyd', '.pyo', '.db', '.sqlite', '.mdb',
+            # 기타 바이너리 형식
+            '.ttf', '.woff', '.woff2', '.eot', '.otf'
+        }
+        
+        # 확장자로 빠르게 확인
+        if file_path.suffix.lower() in binary_extensions:
+            return True
             
         # 파일 앞부분을 읽어 바이너리 여부 확인
         chunk_size = min(1024, file_path.stat().st_size)
@@ -203,7 +226,7 @@ def is_binary_file(file_path: Path) -> bool:
         logger.error(f"파일 타입 확인 중 오류 ({file_path}): {e}")
         return False  # 오류 발생 시 기본적으로 바이너리가 아닌 것으로 가정
 
-def read_text_file(file_path: Path) -> Optional[str]:
+def read_text_file(file_path: Path) -> Optional[Union[str, Dict[str, Any]]]:
     """
     텍스트 파일 내용을 읽어 문자열로 반환
     
@@ -211,33 +234,81 @@ def read_text_file(file_path: Path) -> Optional[str]:
         file_path: 읽을 파일 경로
         
     Returns:
-        파일 내용 문자열 또는 읽기 실패 시 None
+        성공 시: 파일 내용 문자열
+        실패 시: None 또는 오류 정보가 포함된 딕셔너리
+            {'error': str, 'error_type': str, 'details': str}
     """
     try:
-        # 바이너리 파일인 경우 None 반환
+        # 파일이 존재하지 않는 경우 오류 정보 반환
+        if not file_path.exists():
+            return {
+                'error': 'file_not_found',
+                'error_type': 'FileNotFoundError',
+                'details': f"파일이 존재하지 않음: {file_path}"
+            }
+            
+        # 바이너리 파일인 경우 오류 정보 반환
         if is_binary_file(file_path):
             logger.debug(f"바이너리 파일 읽기 건너뜀: {file_path}")
-            return None
+            return {
+                'error': 'binary_file',
+                'error_type': 'TypeError',
+                'details': f"바이너리 파일은 텍스트로 읽을 수 없음: {file_path}"
+            }
             
-        # UTF-8로 읽기 시도
+        # 확장된 인코딩 목록
+        encodings = [
+            'utf-8', 'utf-8-sig',  # BOM 포함된 UTF-8
+            'utf-16', 'utf-16-le', 'utf-16-be',
+            'latin-1', 'iso-8859-1',
+            'cp1252',  # Windows 서유럽
+            'euc-kr', 'cp949',  # 한국어
+            'shift-jis', 'cp932',  # 일본어
+            'gb2312', 'gbk', 'gb18030',  # 중국어
+            'cp1251',  # 키릴 문자
+            'ascii'  # 마지막 시도
+        ]
+
+        # 첫 번째로 UTF-8 시도
         try:
-            return file_path.read_text(encoding='utf-8')
+            content = file_path.read_text(encoding='utf-8')
+            return content
         except UnicodeDecodeError:
-            # UTF-8 실패 시 다른 인코딩 시도
-            encodings = ['latin-1', 'cp1252', 'euc-kr', 'shift-jis']
-            for encoding in encodings:
-                try:
-                    return file_path.read_text(encoding=encoding)
-                except UnicodeDecodeError:
-                    continue
-                    
-            # 모든 인코딩 실패 시
-            logger.warning(f"파일 인코딩 감지 실패: {file_path}")
-            return None
+            pass  # 다른 인코딩 시도
+            
+        # 다른 인코딩 시도
+        decode_errors = []
+        for encoding in encodings[1:]:  # UTF-8은 이미 시도했으므로 건너뜀
+            try:
+                content = file_path.read_text(encoding=encoding)
+                logger.debug(f"파일 성공적으로 읽음 (인코딩: {encoding}): {file_path}")
+                return content
+            except UnicodeDecodeError as e:
+                decode_errors.append(f"{encoding}: {str(e)}")
+                continue
+                
+        # 모든 인코딩 실패 시
+        logger.warning(f"파일 인코딩 감지 실패: {file_path}")
+        return {
+            'error': 'encoding_detection_failed',
+            'error_type': 'UnicodeDecodeError',
+            'details': f"지원하는 모든 인코딩으로 파일을 읽을 수 없음: {file_path}",
+            'attempted_encodings': encodings,
+            'decode_errors': decode_errors[:3]  # 처음 3개 오류만 포함
+        }
             
     except PermissionError:
         logger.warning(f"파일 읽기 권한 없음: {file_path}")
-        return None
+        return {
+            'error': 'access_denied',
+            'error_type': 'PermissionError',
+            'details': f"파일 읽기 권한이 없음: {file_path}"
+        }
     except Exception as e:
+        error_type = type(e).__name__
         logger.error(f"파일 읽기 오류 ({file_path}): {e}")
-        return None 
+        return {
+            'error': 'read_error',
+            'error_type': error_type,
+            'details': f"파일 읽기 중 오류 발생: {str(e)}"
+        } 
