@@ -265,21 +265,19 @@ class MainWindow(QMainWindow):
     
     def _init_icons(self):
         """아이콘 리소스 초기화"""
-        # Qt 시스템 아이콘 사용
-        style = self.style()
+        # 커스텀 SVG 아이콘 사용
+        self.folder_icon = QIcon(":/icons/folder.svg")
+        self.folder_open_icon = QIcon(":/icons/folder_open.svg")
+        self.file_icon = QIcon(":/icons/file_document.svg")
+        self.code_file_icon = QIcon(":/icons/file_code.svg")
+        self.doc_file_icon = QIcon(":/icons/file_document.svg")
         
-        # 기본 아이콘
-        self.folder_icon = style.standardIcon(QStyle.SP_DirIcon)
-        self.file_icon = style.standardIcon(QStyle.SP_FileIcon)
+        # 일부 특별한 아이콘은 시스템 아이콘 유지
+        style = self.style()
         self.symlink_icon = style.standardIcon(QStyle.SP_FileLinkIcon)
         self.binary_icon = style.standardIcon(QStyle.SP_DriveHDIcon)
         self.error_icon = style.standardIcon(QStyle.SP_MessageBoxCritical)
-        
-        # 파일 유형별 추가 아이콘
-        self.text_file_icon = style.standardIcon(QStyle.SP_FileIcon)
         self.image_file_icon = style.standardIcon(QStyle.SP_DirLinkIcon)
-        self.code_file_icon = style.standardIcon(QStyle.SP_FileDialogDetailedView)
-        self.doc_file_icon = style.standardIcon(QStyle.SP_FileLinkIcon)
         
         # 자주 사용되는 파일 확장자별 아이콘 매핑
         self.extension_icon_map = {
@@ -300,7 +298,7 @@ class MainWindow(QMainWindow):
             '.swift': self.code_file_icon,
             
             # 문서 파일
-            '.txt': self.text_file_icon,
+            '.txt': self.doc_file_icon,
             '.md': self.doc_file_icon,
             '.pdf': self.doc_file_icon,
             '.doc': self.doc_file_icon,
@@ -343,7 +341,7 @@ class MainWindow(QMainWindow):
         
         # 파일/폴더 헤더 레이블 추가
         files_header = QLabel("파일/폴더")
-        files_header.setObjectName("headerLabel")
+        files_header.setObjectName("panelHeader")
         left_layout.addWidget(files_header)
         
         # 트리 뷰
@@ -362,6 +360,10 @@ class MainWindow(QMainWindow):
         
         # 트리 모델 변경 시그널 연결
         self.tree_model.itemChanged.connect(self._on_item_changed)
+        
+        # 트리 확장/축소 시그널 연결
+        self.tree_view.expanded.connect(self._on_item_expanded)
+        self.tree_view.collapsed.connect(self._on_item_collapsed)
         
         left_layout.addWidget(self.tree_view)
         
@@ -390,64 +392,94 @@ class MainWindow(QMainWindow):
         right_panel.setObjectName("rightPanel")  # 스타일시트 적용을 위한 objectName 설정
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(16, 16, 16, 16)
-        right_layout.setSpacing(12)
+        right_layout.setSpacing(16)  # 섹션 간 간격 증가
         
         # ----- 폴더 선택 영역 -----
+        folder_section_layout = QVBoxLayout()
+        folder_section_layout.setSpacing(12)
+        
         folder_header = QLabel("폴더 선택")
-        folder_header.setObjectName("headerLabel")
-        right_layout.addWidget(folder_header)
+        folder_header.setObjectName("panelHeader")
+        folder_section_layout.addWidget(folder_header)
         
-        folder_layout = QHBoxLayout()
-        folder_layout.setSpacing(10)
+        # 폴더 열기 버튼
         self.open_btn = QPushButton("폴더 열기")
-        self.open_btn.setObjectName("openFolderButton")  # 스타일시트 적용을 위한 objectName 설정
+        self.open_btn.setObjectName("openFolderButton")
         self.open_btn.clicked.connect(self._open_folder_dialog)
-        folder_layout.addWidget(self.open_btn)
-        
-        right_layout.addLayout(folder_layout)
+        folder_section_layout.addWidget(self.open_btn)
         
         # 현재 폴더 경로 표시
-        self.folder_label = QLabel("현재 폴더: 없음")
-        self.folder_label.setObjectName("pathLabel")  # 스타일시트 적용을 위한 objectName 설정
-        self.folder_label.setWordWrap(True)
-        right_layout.addWidget(self.folder_label)
+        path_layout = QVBoxLayout()
+        path_layout.setSpacing(6)
         
-        # 구분선
-        right_layout.addSpacing(20)
+        path_label = QLabel("폴더:")
+        path_label.setObjectName("infoGroupLabel")
+        path_layout.addWidget(path_label)
+        
+        self.folder_label = QLabel("없음")
+        self.folder_label.setObjectName("pathLabel")
+        self.folder_label.setWordWrap(True)
+        path_layout.addWidget(self.folder_label)
+        
+        folder_section_layout.addLayout(path_layout)
+        right_layout.addLayout(folder_section_layout)
         
         # ----- 선택 정보 영역 -----
+        info_section_layout = QVBoxLayout()
+        info_section_layout.setSpacing(12)
+        
         info_header = QLabel("선택 정보")
-        info_header.setObjectName("headerLabel")
-        right_layout.addWidget(info_header)
+        info_header.setObjectName("panelHeader")
+        info_section_layout.addWidget(info_header)
         
-        # 선택 정보 영역
-        info_layout = QVBoxLayout()
-        info_layout.setSpacing(8)
+        # 선택된 파일 수 정보
+        files_info_layout = QHBoxLayout()
+        files_info_layout.setSpacing(8)
         
-        self.selected_files_label = QLabel("선택된 파일: 0")
-        self.selected_files_label.setObjectName("infoLabel")
-        info_layout.addWidget(self.selected_files_label)
+        files_label = QLabel("파일:")
+        files_label.setObjectName("infoGroupLabel")
+        files_info_layout.addWidget(files_label)
         
-        self.token_label = QLabel("총 토큰 수: 0")
+        self.selected_files_label = QLabel("0")
+        self.selected_files_label.setObjectName("infoValueLabel")
+        files_info_layout.addWidget(self.selected_files_label)
+        files_info_layout.addStretch(1)
+        
+        info_section_layout.addLayout(files_info_layout)
+        
+        # 토큰 수 정보
+        token_info_layout = QHBoxLayout()
+        token_info_layout.setSpacing(8)
+        
+        token_label = QLabel("토큰:")
+        token_label.setObjectName("infoGroupLabel")
+        token_info_layout.addWidget(token_label)
+        
+        self.token_label = QLabel("0")
         self.token_label.setObjectName("counterLabel")
-        info_layout.addWidget(self.token_label)
+        token_info_layout.addWidget(self.token_label)
+        token_info_layout.addStretch(1)
         
-        right_layout.addLayout(info_layout)
-        
-        # 구분선
-        right_layout.addSpacing(20)
+        info_section_layout.addLayout(token_info_layout)
+        right_layout.addLayout(info_section_layout)
         
         # ----- 작업 영역 -----
+        action_section_layout = QVBoxLayout()
+        action_section_layout.setSpacing(12)
+        
         action_header = QLabel("작업")
-        action_header.setObjectName("headerLabel")
-        right_layout.addWidget(action_header)
+        action_header.setObjectName("panelHeader")
+        action_section_layout.addWidget(action_header)
         
         # 작업 버튼 영역
         self.copy_btn = QPushButton("클립보드에 복사")
-        self.copy_btn.setObjectName("copyButton")  # 스타일시트 적용을 위한 objectName 설정
+        self.copy_btn.setObjectName("copyButton")
         self.copy_btn.setEnabled(False)  # 초기 비활성화
         self.copy_btn.clicked.connect(self._copy_to_clipboard)
-        right_layout.addWidget(self.copy_btn)
+        self.copy_btn.setMinimumHeight(40)  # 버튼 높이 증가
+        action_section_layout.addWidget(self.copy_btn)
+        
+        right_layout.addLayout(action_section_layout)
         
         # 나머지 공간을 채우는 빈 영역
         right_layout.addStretch(1)
@@ -546,9 +578,9 @@ class MainWindow(QMainWindow):
             self.file_cache.clear()
             
             # UI 업데이트
-            self.folder_label.setText(f"현재 폴더: {folder_path}")
-            self.selected_files_label.setText("선택된 파일: 0")
-            self.token_label.setText("총 토큰 수: 0")
+            self.folder_label.setText(folder_path)
+            self.selected_files_label.setText("0")
+            self.token_label.setText("0")
             self.copy_btn.setEnabled(False)
             
             # .gitignore 필터 초기화
@@ -741,7 +773,7 @@ class MainWindow(QMainWindow):
             # 아이템 생성
             item = QStandardItem(name)
             
-            # 기본 정보 수집 (툴팁용)
+            # 기본 정보 수집 (툴큐용)
             file_info = []
             file_info.append(f"경로: {path}")
             
@@ -915,7 +947,7 @@ class MainWindow(QMainWindow):
                 self._update_token_count()
                 
                 # 선택된 파일 수 표시 업데이트
-                self.selected_files_label.setText(f"선택된 파일: {self.checked_files}")
+                self.selected_files_label.setText(f"{self.checked_files}")
                 
                 # 복사 버튼 활성화 상태 업데이트
                 self.copy_btn.setEnabled(self.checked_files > 0)
@@ -1015,10 +1047,14 @@ class MainWindow(QMainWindow):
                     self.checked_items.add(path_str)
                     if is_dir:
                         self.checked_dirs += 1
+                    else:
+                        self.checked_files += 1
                 else:
                     self.checked_items.discard(path_str)
                     if is_dir:
                         self.checked_dirs -= 1
+                    else:
+                        self.checked_files -= 1
         
         # 재귀적으로 상위 부모 상태도 업데이트
         self._update_parent_checked_state(parent)
@@ -1116,7 +1152,7 @@ class MainWindow(QMainWindow):
         # 현재 체크된 항목이면 총 토큰 수에 추가
         if file_path in self.checked_items:
             self.total_tokens += token_count
-            self.token_label.setText(f"총 토큰 수: {self.total_tokens:,}")
+            self.token_label.setText(f"{self.total_tokens:,}")
     
     def _on_token_calculation_finished(self):
         """토큰 계산 완료 시 호출"""
@@ -1194,8 +1230,8 @@ class MainWindow(QMainWindow):
             self.total_tokens += token_count
         
         # UI 업데이트
-        self.token_label.setText(f"총 토큰 수: {self.total_tokens:,}")
-        self.selected_files_label.setText(f"선택된 파일: {self.checked_files}")
+        self.token_label.setText(f"{self.total_tokens:,}")
+        self.selected_files_label.setText(f"{self.checked_files}")
         
         # 제외된 파일이 있으면 상태 표시줄에 정보 표시
         if excluded_files > 0:
@@ -1491,4 +1527,16 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"설정 저장 중 오류: {e}")
             
-        event.accept() 
+        event.accept()
+
+    def _on_item_expanded(self, index):
+        """트리 항목이 확장되었을 때 호출됨"""
+        item = self.tree_model.itemFromIndex(index)
+        if item and item.data(Qt.UserRole) is True:  # 디렉토리인 경우만
+            item.setIcon(self.folder_open_icon)
+    
+    def _on_item_collapsed(self, index):
+        """트리 항목이 축소되었을 때 호출됨"""
+        item = self.tree_model.itemFromIndex(index)
+        if item and item.data(Qt.UserRole) is True:  # 디렉토리인 경우만
+            item.setIcon(self.folder_icon) 
