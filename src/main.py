@@ -10,8 +10,8 @@ import sys
 import logging
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QFile, QTextStream # QTextStream 임포트 추가
-from gui.main_window import MainWindow
-from gui.resources import resources # 컴파일된 리소스 임포트
+from src.gui.main_window import MainWindow
+from src.gui.resources import resources # 컴파일된 리소스 임포트
 
 # 로깅 설정
 logging.basicConfig(

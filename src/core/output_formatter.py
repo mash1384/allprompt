@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 
-from core.file_scanner import read_text_file
+from src.core.file_scanner import read_text_file
 
 logger = logging.getLogger(__name__)
 

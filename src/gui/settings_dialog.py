@@ -11,11 +11,11 @@ from typing import Dict, Any, List
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
-    QPushButton, QCheckBox, QGroupBox, QFormLayout
+    QPushButton, QCheckBox, QGroupBox, QFormLayout, QStyle
 )
 from PySide6.QtCore import Qt, Signal
 
-from core.tokenizer import Tokenizer
+from src.core.tokenizer import Tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +25,13 @@ class SettingsDialog(QDialog):
     # 설정 변경 시그널
     settings_changed = Signal(dict)
     
-    def __init__(self, parent=None, current_settings=None):
+    def __init__(self, available_models=None, current_model=None, parent=None, current_settings=None):
         """
         설정 다이얼로그 초기화
         
         Args:
+            available_models: 사용 가능한 모델 목록
+            current_model: 현재 선택된 모델
             parent: 부모 위젯
             current_settings: 현재 설정 값 딕셔너리
         """
@@ -37,6 +39,9 @@ class SettingsDialog(QDialog):
         
         self.setWindowTitle("설정")
         self.setMinimumWidth(400)
+        
+        self.available_models = available_models or []
+        self.current_model = current_model
         
         # 기본 설정값
         self.default_settings = {
@@ -47,6 +52,8 @@ class SettingsDialog(QDialog):
         
         # 현재 설정값
         self.current_settings = current_settings or self.default_settings.copy()
+        if current_model:
+            self.current_settings["model_name"] = current_model
         
         # UI 초기화
         self._init_ui()
@@ -55,22 +62,30 @@ class SettingsDialog(QDialog):
         """UI 구성 요소 초기화"""
         # 메인 레이아웃
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(16)
         
         # ===== 토큰화 모델 설정 그룹 =====
         model_group = QGroupBox("토큰화 모델 설정")
         model_layout = QFormLayout(model_group)
+        model_layout.setContentsMargins(12, 20, 12, 12)
+        model_layout.setSpacing(10)
         
         # 모델 선택 콤보 박스
         self.model_combo = QComboBox()
         
-        # 사용 가능한 모델 목록 가져오기
-        tokenizer = Tokenizer()
-        available_models = tokenizer.get_available_models()
-        self.model_combo.addItems(available_models)
+        # 사용 가능한 모델 목록 설정
+        if self.available_models:
+            self.model_combo.addItems(self.available_models)
+        else:
+            # 기존 코드는 유지 (백업용)
+            tokenizer = Tokenizer()
+            available_models = tokenizer.get_available_models()
+            self.model_combo.addItems(available_models)
         
         # 현재 설정값으로 콤보 박스 설정
         current_model = self.current_settings.get("model_name")
-        if current_model in available_models:
+        if current_model in [self.model_combo.itemText(i) for i in range(self.model_combo.count())]:
             self.model_combo.setCurrentText(current_model)
         
         model_layout.addRow("토큰화 모델:", self.model_combo)
@@ -79,6 +94,8 @@ class SettingsDialog(QDialog):
         # ===== 파일 스캔 설정 그룹 =====
         scan_group = QGroupBox("파일 스캔 설정")
         scan_layout = QVBoxLayout(scan_group)
+        scan_layout.setContentsMargins(12, 20, 12, 12)
+        scan_layout.setSpacing(10)
         
         # 숨김 파일 표시 체크박스
         self.show_hidden_files_cb = QCheckBox("숨김 파일/폴더 표시")
@@ -94,9 +111,12 @@ class SettingsDialog(QDialog):
         
         # ===== 버튼 영역 =====
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
         
         # 기본값 버튼
         reset_button = QPushButton("기본값으로 복원")
+        reset_button.setProperty("secondary", True)
+        reset_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         reset_button.clicked.connect(self._reset_to_defaults)
         button_layout.addWidget(reset_button)
         
@@ -105,10 +125,13 @@ class SettingsDialog(QDialog):
         
         # 취소/확인 버튼
         cancel_button = QPushButton("취소")
+        cancel_button.setProperty("secondary", True)
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
         
         save_button = QPushButton("저장")
+        save_button.setObjectName("copyButton")
+        save_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
         save_button.clicked.connect(self._save_settings)
         save_button.setDefault(True)
         button_layout.addWidget(save_button)
@@ -148,4 +171,8 @@ class SettingsDialog(QDialog):
         Returns:
             현재 설정값 딕셔너리
         """
-        return self.current_settings 
+        return self.current_settings
+
+    def get_selected_model(self):
+        """선택된 모델 반환"""
+        return self.model_combo.currentText() 
