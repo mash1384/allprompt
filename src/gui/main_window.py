@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QStyledItemDelegate, QProxyStyle
 )
 from PySide6.QtCore import Qt, QSize, QDir, Signal, Slot, QThread, QSortFilterProxyModel, QModelIndex, QEvent, QObject
-from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon, QAction, QFont, QDesktopServices
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon, QAction, QFont, QDesktopServices, QPainter
 
 # 파일 스캐너 모듈 임포트
 from src.core.file_scanner import scan_directory, is_binary_file, read_text_file
@@ -127,53 +127,45 @@ FILE_EXTENSIONS_TO_LANGUAGE = {
 
 class HoverEventFilter(QObject):
     """
-    모든 호버 관련 이벤트를 필터링하는 이벤트 필터
+    마우스 호버 이벤트를 처리하는 이벤트 필터
+    파일 및 폴더 항목에 호버 시 회색 테두리 효과를 활성화하기 위해 이벤트를 통과시킴
     """
     def eventFilter(self, watched, event):
-        # 호버 관련 이벤트 차단
-        if event.type() == QEvent.HoverEnter or event.type() == QEvent.HoverLeave or event.type() == QEvent.HoverMove:
-            return True  # 이벤트 처리된 것으로 간주하고 전파 중지
-        
-        # 기타 이벤트는 정상 처리
+        # 모든 이벤트를 통과시켜 호버 효과가 활성화되도록 함
         return super().eventFilter(watched, event)
 
 class NoHoverDelegate(QStyledItemDelegate):
     """
-    호버 효과를 제거하는 커스텀 항목 델리게이트
+    호버 상태에서도 선택 효과만 유지하는 커스텀 항목 델리게이트
     """
     def paint(self, painter, option, index):
-        # 호버 상태 플래그 제거
-        if option.state & QStyle.State_MouseOver:
-            option.state &= ~QStyle.State_MouseOver
+        # 선택 상태와 포커스 상태 효과는 제거하지만 호버 효과는 유지
+        option_copy = option.__class__(option)
         
         # 선택 상태 플래그 제거
-        if option.state & QStyle.State_Selected:
-            option.state &= ~QStyle.State_Selected
+        if option_copy.state & QStyle.State_Selected:
+            option_copy.state &= ~QStyle.State_Selected
         
         # 포커스 상태 플래그 제거
-        if option.state & QStyle.State_HasFocus:
-            option.state &= ~QStyle.State_HasFocus
+        if option_copy.state & QStyle.State_HasFocus:
+            option_copy.state &= ~QStyle.State_HasFocus
         
-        # 기본 그리기 메서드 호출
-        super().paint(painter, option, index)
+        # 기본 스타일로 배경과 기본 내용 그리기 (호버 효과 유지)
+        super().paint(painter, option_copy, index)
 
 class NoHoverStyle(QProxyStyle):
     """
-    호버 효과를 모두 제거하는 프록시 스타일
+    호버 효과만 유지하고 다른 효과는 제거하는 프록시 스타일
     """
     def __init__(self, style=None):
         super().__init__(style)
         
     def drawPrimitive(self, element, option, painter, widget=None):
         """
-        기본 요소 그리기를 재정의하여 호버 효과 제거
+        기본 요소 그리기를 재정의하여 선택 및 포커스 효과 제거
         """
-        # 항목 호버 효과 제거
+        # 항목 효과 제어 (PE_PanelItemViewItem은 항목의 배경을 그리는 요소)
         if element == QStyle.PE_PanelItemViewItem:
-            # 호버 상태 제거
-            if option.state & QStyle.State_MouseOver:
-                option.state &= ~QStyle.State_MouseOver
-            
             # 선택 상태 제거
             if option.state & QStyle.State_Selected:
                 option.state &= ~QStyle.State_Selected
@@ -181,16 +173,19 @@ class NoHoverStyle(QProxyStyle):
             # 포커스 상태 제거
             if option.state & QStyle.State_HasFocus:
                 option.state &= ~QStyle.State_HasFocus
+                
+            # 호버 상태는 유지 (제거하지 않음)
+            # 기본 그리기에 호버 상태를 전달
         
         # 상위 클래스의 그리기 메서드 호출
         super().drawPrimitive(element, option, painter, widget)
         
     def styleHint(self, hint, option=None, widget=None, returnData=None):
         """
-        스타일 힌트 재정의 - 호버 효과와 관련된 힌트 처리
+        스타일 힌트 재정의
         """
-        # 호버 관련 힌트 비활성화
-        if hint in [QStyle.SH_ItemView_ChangeHighlightOnFocus, QStyle.SH_ItemView_ShowDecorationSelected]:
+        # 특정 힌트 비활성화
+        if hint in [QStyle.SH_ItemView_ShowDecorationSelected]:
             return 0
         
         # 그 외 힌트는 기본 처리
@@ -431,33 +426,31 @@ class MainWindow(QMainWindow):
         self.tree_view.setTextElideMode(Qt.ElideMiddle)
         self.tree_view.setAttribute(Qt.WA_MacShowFocusRect, False)  # macOS 포커스 사각형 제거
         self.tree_view.setFocusPolicy(Qt.NoFocus)  # 포커스 효과 제거
-        self.tree_view.setMouseTracking(False)  # 마우스 추적 비활성화
+        self.tree_view.setMouseTracking(True)  # 마우스 추적 활성화 (호버 효과 활성화)
         
-        # 호버 이벤트 완전 필터링을 위한 이벤트 필터 설치
+        # 호버 이벤트 필터링을 위한 이벤트 필터 설치 
         hover_filter = HoverEventFilter(self.tree_view)
         self.tree_view.viewport().installEventFilter(hover_filter)
         self.tree_view.installEventFilter(hover_filter)
         
-        # 호버 효과 제거를 위한 커스텀 델리게이트 설정
-        no_hover_delegate = NoHoverDelegate(self.tree_view)
-        self.tree_view.setItemDelegate(no_hover_delegate)
+        # 커스텀 델리게이트 설정 (선택 효과 유지)
+        # 기존 no_hover_delegate 대신에 기본 델리게이트 사용
         
-        # 호버 효과를 완전히 비활성화하기 위한 속성 설정
-        self.tree_view.setAttribute(Qt.WA_NoMousePropagation, True)  # 마우스 이벤트 전파 차단
+        # 마우스 이벤트 전파 허용
+        self.tree_view.setAttribute(Qt.WA_NoMousePropagation, False)
         
-        # 직접 인라인 스타일 적용 (외부 스타일시트와 함께 적용)
+        # 인라인 스타일 적용 (호버 시 회색 테두리 효과 추가)
         inline_style = """
             QTreeView::item:hover { 
-                background-color: transparent !important; 
-                border: none !important;
-                color: #DCE0E8;
+                border: 1px solid #8E8E8E; 
+                background-color: transparent;
             }
             QTreeView::branch:hover { 
-                background-color: transparent !important; 
-                border: none !important;
+                background-color: transparent;
             }
-            QTreeView::indicator:hover {
-                background-color: #282C34;
+            QTreeView::indicator {
+                border: 1px solid #5A6374;
+                background-color: #1A1D23;
             }
         """
         self.tree_view.setStyleSheet(inline_style)
