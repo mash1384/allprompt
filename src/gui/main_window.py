@@ -351,7 +351,7 @@ class MainWindow(QMainWindow):
         # 파일 트리 뷰
         self.tree_view = QTreeView()
         self.tree_view.setSelectionMode(QTreeView.SingleSelection)
-        self.tree_view.setAlternatingRowColors(True)
+        self.tree_view.setAlternatingRowColors(False)
         self.tree_view.setUniformRowHeights(True)
         self.tree_view.header().setVisible(False)
         self.tree_view.setTextElideMode(Qt.ElideMiddle)
