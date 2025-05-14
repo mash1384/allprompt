@@ -21,9 +21,9 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QFileDialog, QTreeView, QStatusBar,
     QMessageBox, QProgressBar, QMenu, QMenuBar, QApplication,
     QStyle, QCheckBox, QSizePolicy, QDialog, QDialogButtonBox, QFormLayout,
-    QLineEdit, QComboBox
+    QLineEdit, QComboBox, QStyledItemDelegate, QProxyStyle
 )
-from PySide6.QtCore import Qt, QSize, QDir, Signal, Slot, QThread, QSortFilterProxyModel, QModelIndex
+from PySide6.QtCore import Qt, QSize, QDir, Signal, Slot, QThread, QSortFilterProxyModel, QModelIndex, QEvent, QObject
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon, QAction, QFont, QDesktopServices
 
 # 파일 스캐너 모듈 임포트
@@ -125,6 +125,77 @@ FILE_EXTENSIONS_TO_LANGUAGE = {
     '.gitignore': 'gitignore',
 }
 
+class HoverEventFilter(QObject):
+    """
+    모든 호버 관련 이벤트를 필터링하는 이벤트 필터
+    """
+    def eventFilter(self, watched, event):
+        # 호버 관련 이벤트 차단
+        if event.type() == QEvent.HoverEnter or event.type() == QEvent.HoverLeave or event.type() == QEvent.HoverMove:
+            return True  # 이벤트 처리된 것으로 간주하고 전파 중지
+        
+        # 기타 이벤트는 정상 처리
+        return super().eventFilter(watched, event)
+
+class NoHoverDelegate(QStyledItemDelegate):
+    """
+    호버 효과를 제거하는 커스텀 항목 델리게이트
+    """
+    def paint(self, painter, option, index):
+        # 호버 상태 플래그 제거
+        if option.state & QStyle.State_MouseOver:
+            option.state &= ~QStyle.State_MouseOver
+        
+        # 선택 상태 플래그 제거
+        if option.state & QStyle.State_Selected:
+            option.state &= ~QStyle.State_Selected
+        
+        # 포커스 상태 플래그 제거
+        if option.state & QStyle.State_HasFocus:
+            option.state &= ~QStyle.State_HasFocus
+        
+        # 기본 그리기 메서드 호출
+        super().paint(painter, option, index)
+
+class NoHoverStyle(QProxyStyle):
+    """
+    호버 효과를 모두 제거하는 프록시 스타일
+    """
+    def __init__(self, style=None):
+        super().__init__(style)
+        
+    def drawPrimitive(self, element, option, painter, widget=None):
+        """
+        기본 요소 그리기를 재정의하여 호버 효과 제거
+        """
+        # 항목 호버 효과 제거
+        if element == QStyle.PE_PanelItemViewItem:
+            # 호버 상태 제거
+            if option.state & QStyle.State_MouseOver:
+                option.state &= ~QStyle.State_MouseOver
+            
+            # 선택 상태 제거
+            if option.state & QStyle.State_Selected:
+                option.state &= ~QStyle.State_Selected
+                
+            # 포커스 상태 제거
+            if option.state & QStyle.State_HasFocus:
+                option.state &= ~QStyle.State_HasFocus
+        
+        # 상위 클래스의 그리기 메서드 호출
+        super().drawPrimitive(element, option, painter, widget)
+        
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        """
+        스타일 힌트 재정의 - 호버 효과와 관련된 힌트 처리
+        """
+        # 호버 관련 힌트 비활성화
+        if hint in [QStyle.SH_ItemView_ChangeHighlightOnFocus, QStyle.SH_ItemView_ShowDecorationSelected]:
+            return 0
+        
+        # 그 외 힌트는 기본 처리
+        return super().styleHint(hint, option, widget, returnData)
+
 class TokenizerThread(QThread):
     """
     백그라운드 토큰 계산 스레드
@@ -203,6 +274,9 @@ class MainWindow(QMainWindow):
         
         # 설정 관리자 초기화
         self.settings_manager = SettingsManager()
+        
+        # 커스텀 호버 없는 스타일 적용
+        self.custom_style = NoHoverStyle()
         
         # 기본 UI 설정
         self.setWindowTitle("LLM 프롬프트 헬퍼")
@@ -350,11 +424,46 @@ class MainWindow(QMainWindow):
         
         # 파일 트리 뷰
         self.tree_view = QTreeView()
-        self.tree_view.setSelectionMode(QTreeView.SingleSelection)
+        self.tree_view.setSelectionMode(QTreeView.NoSelection)
         self.tree_view.setAlternatingRowColors(False)
         self.tree_view.setUniformRowHeights(True)
         self.tree_view.header().setVisible(False)
         self.tree_view.setTextElideMode(Qt.ElideMiddle)
+        self.tree_view.setAttribute(Qt.WA_MacShowFocusRect, False)  # macOS 포커스 사각형 제거
+        self.tree_view.setFocusPolicy(Qt.NoFocus)  # 포커스 효과 제거
+        self.tree_view.setMouseTracking(False)  # 마우스 추적 비활성화
+        
+        # 호버 이벤트 완전 필터링을 위한 이벤트 필터 설치
+        hover_filter = HoverEventFilter(self.tree_view)
+        self.tree_view.viewport().installEventFilter(hover_filter)
+        self.tree_view.installEventFilter(hover_filter)
+        
+        # 호버 효과 제거를 위한 커스텀 델리게이트 설정
+        no_hover_delegate = NoHoverDelegate(self.tree_view)
+        self.tree_view.setItemDelegate(no_hover_delegate)
+        
+        # 호버 효과를 완전히 비활성화하기 위한 속성 설정
+        self.tree_view.setAttribute(Qt.WA_NoMousePropagation, True)  # 마우스 이벤트 전파 차단
+        
+        # 직접 인라인 스타일 적용 (외부 스타일시트와 함께 적용)
+        inline_style = """
+            QTreeView::item:hover { 
+                background-color: transparent !important; 
+                border: none !important;
+                color: #DCE0E8;
+            }
+            QTreeView::branch:hover { 
+                background-color: transparent !important; 
+                border: none !important;
+            }
+            QTreeView::indicator:hover {
+                background-color: #282C34;
+            }
+        """
+        self.tree_view.setStyleSheet(inline_style)
+        
+        # 커스텀 스타일 적용
+        self.tree_view.setStyle(self.custom_style)
         
         # 트리 뷰의 크기 정책 설정 (수평/수직 확장)
         self.tree_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -587,6 +696,9 @@ class MainWindow(QMainWindow):
         
         # 스타일시트를 통해 사용자 정의 스타일 적용
         # (resources.py에 컴파일된 QSS 파일 사용)
+        
+        # 주의: QTreeView에는 setTristate 메소드가 없음
+        # 부분 체크 상태는 _on_item_changed 및 _update_parent_checked_state 메소드에서 수동으로 처리
     
     def _create_menu(self):
         """메뉴 바 생성"""
@@ -1139,6 +1251,9 @@ class MainWindow(QMainWindow):
         # 부모 상태 업데이트
         if all_checked:
             parent.setCheckState(Qt.Checked)
+        elif any_checked:
+            # 일부만 체크된 경우 부분 체크 상태로 설정
+            parent.setCheckState(Qt.PartiallyChecked)
         else:
             parent.setCheckState(Qt.Unchecked)
         
@@ -1148,7 +1263,7 @@ class MainWindow(QMainWindow):
             is_dir = parent_path.is_dir()
             path_str = str(parent_path)
             
-            # 부모가 체크되었는지 여부
+            # 부모가 체크되었는지 여부 (완전히 체크된 경우만 카운트)
             is_checked = all_checked
             was_checked = path_str in self.checked_items
             

@@ -267,39 +267,79 @@ QTreeView {
     border: 1px solid #32363F;
     border-radius: 4px;
     alternate-background-color: #23272E;
-    selection-background-color: #3E4452;
+    selection-background-color: transparent !important;
     selection-color: #DCE0E8;
     padding: 4px;
     outline: none;
     font-size: 13px;
-    show-decoration-selected: 1;
+    show-decoration-selected: 0;
     padding-left: 5px;
+    highlight: transparent !important;
+}
+
+QTreeView:focus {
+    outline: none;
+    border: 1px solid #32363F;
 }
 
 QTreeView::item {
     height: 28px;
-    padding: 5px 0px;
+    padding: 4px 2px;
     border-radius: 4px;
-    margin: 2px;
-    transition: background-color 180ms ease-in-out;
+    margin: 1px;
+    border: none;
+    background-color: transparent !important;
 }
 
 QTreeView::item:hover {
-    background-color: #32363F;
+    background-color: transparent !important;
+    border: none !important;
+    color: #DCE0E8;
 }
 
-QTreeView::item:selected {
-    background-color: #528BFF;
-    color: #FFFFFF;
-    transition: background-color 180ms ease-in-out, color 180ms ease-in-out;
+QTreeView::item:!hover {
+    background-color: transparent !important;
+    border: none !important;
+}
+
+QTreeView::item:selected, 
+QTreeView::item:selected:active,
+QTreeView::item:selected:!active,
+QTreeView::item:selected:hover,
+QTreeView::item:selected:disabled,
+QTreeView::item:hover:selected {
+    background-color: transparent !important;
+    color: #DCE0E8;
+    border: none !important;
+    outline: none;
+}
+
+QTreeView::item:focus {
+    background-color: transparent !important;
+    border: none !important;
+    outline: none;
 }
 
 QTreeView::branch {
-    background-color: transparent;
+    background-color: transparent !important;
+    border: none !important;
 }
 
-QTreeView::branch:selected {
-    background-color: #528BFF;
+QTreeView::branch:hover {
+    background-color: transparent !important;
+    border: none !important;
+}
+
+QTreeView::branch:!hover {
+    background-color: transparent !important;
+    border: none !important;
+}
+
+QTreeView::branch:selected,
+QTreeView::branch:selected:active,
+QTreeView::branch:selected:!active {
+    background-color: transparent !important;
+    border: none !important;
 }
 
 QTreeView::branch:has-children:!has-siblings:closed,
@@ -307,6 +347,8 @@ QTreeView::branch:closed:has-children:has-siblings {
     border-image: none;
     image: url(:/icons/branch_closed.svg);
     padding-left: 6px;
+    background-color: transparent !important;
+    border: none !important;
 }
 
 QTreeView::branch:open:has-children:!has-siblings,
@@ -314,8 +356,11 @@ QTreeView::branch:open:has-children:has-siblings {
     border-image: none;
     image: url(:/icons/branch_open.svg);
     padding-left: 6px;
+    background-color: transparent !important;
+    border: none !important;
 }
 
+/* 체크박스 스타일 */
 QTreeView::indicator {
     width: 18px;
     height: 18px;
@@ -327,6 +372,11 @@ QTreeView::indicator {
 
 QTreeView::indicator:hover {
     border: 1px solid #DCE0E8;
+    background-color: #282C34;
+}
+
+QTreeView::indicator:!hover {
+    background-color: #282C34;
 }
 
 QTreeView::indicator:checked {
@@ -336,9 +386,9 @@ QTreeView::indicator:checked {
 }
 
 QTreeView::indicator:indeterminate {
-    background-color: #3E4452;
+    background-color: #4A5E80;
     border: 1px solid #61AFEF;
-    image: url(:/icons/dash.svg);
+    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMyA4SDEzIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+);
 }
 
 QHeaderView::section {
