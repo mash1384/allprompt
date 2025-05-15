@@ -191,6 +191,33 @@ class TokenizerThread(QThread):
             logger.error(f"토큰 계산 중 오류: {e}")
             self.calculation_error.emit(str(e))
 
+class CheckableItemDelegate(QStyledItemDelegate):
+    """
+    체크박스 아이템을 위한 커스텀 델리게이트
+    텍스트 영역 클릭으로도 체크박스 상태 변경을 지원합니다.
+    """
+    def editorEvent(self, event, model, option, index):
+        # 더블 클릭, 키 입력 등의 이벤트는 기본 동작으로 처리
+        if event.type() != QEvent.MouseButtonRelease or not index.isValid():
+            return super().editorEvent(event, model, option, index)
+            
+        # 항목이 체크 가능한지 확인
+        item = model.itemFromIndex(index)
+        if not item or not item.isCheckable() or not item.isEnabled():
+            return super().editorEvent(event, model, option, index)
+            
+        # 폴더 항목은 기본 동작으로 처리 (확장/축소를 위해)
+        is_directory = item.data(Qt.UserRole)
+        if is_directory:
+            return super().editorEvent(event, model, option, index)
+        
+        # 체크박스 상태 토글
+        current_state = item.checkState()
+        new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+        item.setCheckState(new_state)
+        
+        return True
+
 class MainWindow(QMainWindow):
     """메인 애플리케이션 윈도우"""
     
@@ -233,6 +260,9 @@ class MainWindow(QMainWindow):
         self.checked_items = set()
         self.checked_files = 0
         self.checked_dirs = 0
+        
+        # 체크 이벤트 처리 플래그
+        self._processing_check_event = False
         
         # 아이템 경로-객체 매핑
         self.item_path_map = {}
@@ -403,6 +433,10 @@ class MainWindow(QMainWindow):
         
         # 트리 뷰 이벤트 연결
         self.tree_model.itemChanged.connect(self._on_item_changed)
+        
+        # 커스텀 델리게이트 설정
+        self.checkable_delegate = CheckableItemDelegate()
+        self.tree_view.setItemDelegate(self.checkable_delegate)
         
         # 폴더 확장/축소 이벤트 연결
         self.tree_view.expanded.connect(self._on_item_expanded)
@@ -1042,156 +1076,88 @@ class MainWindow(QMainWindow):
     
     def _on_item_changed(self, item):
         """
-        트리 아이템 변경 시 호출되는 슬롯
-        체크박스 상태 변경 시 토큰 계산 로직 처리 및 부모/자식 자동 선택/해제
-        
-        Args:
-            item: 변경된 아이템
+        트리 아이템 체크 상태 변경 시 호출되는 슬롯
+        모든 체크 상태 변경 로직을 중앙화하여 처리합니다.
         """
-        if not self.current_folder:
+        if not self.current_folder or not item.isCheckable():
             return
-            
+        
         # 체크 상태가 변경된 경우에만 처리
-        if item.isCheckable():
-            checked = item.checkState() == Qt.Checked
-            item_path = self._get_item_path(item)
-            
-            if not item_path:
-                return
-
-            # 상태 변경 이벤트 캐치로 인한 재귀 호출을 막기 위해 모델 시그널 연결 해제
+        checked = item.checkState() == Qt.Checked
+        item_path = self._get_item_path(item)
+        
+        if not item_path:
+            return
+        
+        # 이벤트 처리 중 플래그 설정
+        if hasattr(self, '_processing_check_event') and self._processing_check_event:
+            return
+        
+        self._processing_check_event = True
+        
+        try:
+            # 일시적으로 모델 시그널 연결 해제
             self.tree_model.itemChanged.disconnect(self._on_item_changed)
             
-            try:
-                # 체크 상태에 따라 처리
-                is_dir = item_path.is_dir()
-                
-                # 디버깅: 아이템 정보 및 상태 출력
-                print(f"===== 항목 변경 감지 =====")
-                print(f"항목 텍스트: {item.text()}")
-                print(f"현재 체크 상태: {item.checkState()}")
-                print(f"checked 변수 값: {checked}")
-                print(f"is_dir 값: {is_dir}")
-                print(f"현재 checked_items 수: {len(self.checked_items)}")
-                print(f"현재 checked_files: {self.checked_files}")
-                print(f"현재 checked_dirs: {self.checked_dirs}")
-
-                # 이전 체크 상태를 기록
-                was_checked = str(item_path) in self.checked_items
-                
-                # 현재 체크 상태로 처리
-                if checked != was_checked:
-                    if checked:
-                        self.checked_items.add(str(item_path))
-                        if is_dir:
-                            self.checked_dirs += 1
-                        else:
-                            self.checked_files += 1
-                        logger.debug(f"아이템 체크됨: {item_path}")
-                    else:
-                        self.checked_items.discard(str(item_path))
-                        if is_dir:
-                            self.checked_dirs -= 1
-                        else:
-                            self.checked_files -= 1
-                
-                # 디버깅: _set_item_checked_state 호출 전 상태 출력
-                print(f"_set_item_checked_state 호출 전:")
-                print(f"업데이트 후 checked_items 수: {len(self.checked_items)}")
-                print(f"업데이트 후 checked_files: {self.checked_files}")
-                print(f"업데이트 후 checked_dirs: {self.checked_dirs}")
-                
-                # 폴더인 경우 하위 항목 상태도 함께 변경
-                if is_dir:
-                    logger.debug(f"디렉토리 체크 상태 변경: {item_path}, 체크됨: {checked}")
-                    # 하위 항목 모두 동일한 체크 상태로 설정
-                    self._set_item_checked_state(item, checked)
-                
-                # 디버깅: _update_parent_checked_state 호출 전 상태 출력
-                print(f"_update_parent_checked_state 호출 전:")
-                print(f"업데이트 후 checked_items 수: {len(self.checked_items)}")
-                print(f"업데이트 후 checked_files: {self.checked_files}")
-                print(f"업데이트 후 checked_dirs: {self.checked_dirs}")
-                
-                # 부모 폴더의 체크 상태 업데이트
-                self._update_parent_checked_state(item)
-                
-                # 디버깅: 모든 처리 완료 후 최종 상태
-                print(f"모든 처리 완료 후:")
-                print(f"최종 checked_items 수: {len(self.checked_items)}")
-                print(f"최종 checked_files: {self.checked_files}")
-                print(f"최종 checked_dirs: {self.checked_dirs}")
-                print(f"================================")
-                
-                # 총 토큰 수 업데이트
-                self._update_token_count()
-                
-                # 선택된 파일 수 표시 업데이트
-                self.selected_files_count.setText(f"{self.checked_files}개")
-                
-                # 복사 버튼 활성화 상태 업데이트
-                self.copy_button.setEnabled(self.checked_files > 0)
-            finally:
-                # 모델 시그널 다시 연결
-                self.tree_model.itemChanged.connect(self._on_item_changed)
+            # 1. 현재 아이템 상태 업데이트
+            path_str = str(item_path)
+            is_dir = item_path.is_dir()
+            
+            if checked:
+                self.checked_items.add(path_str)
+            else:
+                self.checked_items.discard(path_str)
+            
+            # 2. 폴더인 경우 하위 항목도 같은 상태로 설정
+            if is_dir:
+                self._set_item_checked_state(item, checked)
+            
+            # 3. 부모 폴더의 체크 상태 업데이트
+            self._update_parent_checked_state(item)
+            
+            # 4. 체크 통계 업데이트 (파일/폴더 카운트)
+            self._update_check_stats()
+            
+            # 5. 토큰 수 업데이트
+            self._update_token_count()
+        finally:
+            # 모델 시그널 다시 연결
+            self.tree_model.itemChanged.connect(self._on_item_changed)
+            self._processing_check_event = False
     
     def _set_item_checked_state(self, item, checked):
         """
         아이템과 모든 자식 아이템의 체크 상태를 설정
-        
-        Args:
-            item: 대상 아이템
-            checked: 설정할 체크 상태 (True: 체크됨, False: 체크 해제됨)
+        중복 계산 방지 로직 추가
         """
         # 현재 상태와 설정할 상태를 비교하여 변경이 필요한 경우에만 처리
-        current_qt_check_state = item.checkState()
-        target_qt_check_state = Qt.Checked if checked else Qt.Unchecked
+        current_state = item.checkState()
+        target_state = Qt.Checked if checked else Qt.Unchecked
         
-        # 디버깅: 상태 비교 출력
-        print(f"  > 아이템: {item.text()}, 현재 상태: {current_qt_check_state}, 대상 상태: {target_qt_check_state}")
-        
-        # 상태가 이미 원하는 상태이면 중복 시그널 발생을 방지하기 위해 처리하지 않음
-        if current_qt_check_state != target_qt_check_state:
+        if current_state != target_state:
             # 현재 아이템의 체크 상태 설정
-            item.setCheckState(target_qt_check_state)
+            item.setCheckState(target_state)
             
-            # 아이템 경로 가져오기 (현재 아이템 상태를 tracked_items에 반영하기 위해)
+            # 아이템 경로 업데이트
             item_path = self._get_item_path(item)
             if item_path:
-                is_dir = item_path.is_dir()
                 path_str = str(item_path)
-                
-                # 이전 체크 상태
-                was_checked = path_str in self.checked_items
-                
-                # 상태가 변경된 경우에만 처리
-                if checked != was_checked:
-                    if checked:
-                        self.checked_items.add(path_str)
-                        if is_dir:
-                            self.checked_dirs += 1
-                        else:
-                            self.checked_files += 1
-                    else:
-                        self.checked_items.discard(path_str)
-                        if is_dir:
-                            self.checked_dirs -= 1
-                        else:
-                            self.checked_files -= 1
+                if checked:
+                    self.checked_items.add(path_str)
+                else:
+                    self.checked_items.discard(path_str)
         
-        # 모든 자식 아이템 처리
+        # 모든 자식 아이템 처리 - 상태와 무관하게 모든 자식 처리
         row_count = item.rowCount()
         for row in range(row_count):
             child_item = item.child(row)
-            if child_item and child_item.isCheckable():
+            if child_item and child_item.isCheckable() and child_item.isEnabled():
                 self._set_item_checked_state(child_item, checked)
     
     def _update_parent_checked_state(self, item):
         """
-        부모 아이템의 체크 상태를 자식 아이템들의 상태를 기준으로 업데이트
-        
-        Args:
-            item: 상태가 변경된 아이템
+        부모 아이템의 체크 상태를 자식 아이템들의 상태 기준으로 업데이트
+        불필요한 재귀 호출 방지 로직 추가
         """
         parent = item.parent()
         if not parent:
@@ -1200,60 +1166,46 @@ class MainWindow(QMainWindow):
         # 부모의 모든 자식 상태 확인
         all_checked = True
         any_checked = False
+        has_children = False
         
         row_count = parent.rowCount()
         for row in range(row_count):
             child = parent.child(row)
-            if child and child.isCheckable():
+            if child and child.isCheckable() and child.isEnabled():
+                has_children = True
                 if child.checkState() == Qt.Checked:
                     any_checked = True
                 else:
                     all_checked = False
                 
                 if any_checked and not all_checked:
-                    break  # 상태 결정을 위한 충분한 정보 확보
+                    break  # 조기 종료
         
+        # 자식이 없는 경우 처리
+        if not has_children:
+            return
+            
         # 부모 상태 결정
         new_state = Qt.Checked if all_checked else (Qt.PartiallyChecked if any_checked else Qt.Unchecked)
         
-        # 현재 상태와 새 상태를 비교하여 변경이 필요한 경우에만 처리
+        # 현재 상태와 새 상태 비교
         current_state = parent.checkState()
         
-        # 디버깅: 상태 비교 출력
-        print(f"  > 부모 아이템: {parent.text()}, 현재 상태: {current_state}, 대상 상태: {new_state}")
-        
-        # 상태가 이미 원하는 상태이면 중복 시그널 발생을 방지하기 위해 처리하지 않음
         if current_state != new_state:
             # 부모 상태 업데이트
             parent.setCheckState(new_state)
             
-            # 부모 경로 가져오기
+            # 부모 경로 업데이트 (완전 체크된 경우만)
             parent_path = self._get_item_path(parent)
             if parent_path:
-                is_dir = parent_path.is_dir()
                 path_str = str(parent_path)
-                
-                # 부모가 체크되었는지 여부 (완전히 체크된 경우만 카운트)
-                is_checked = all_checked
-                was_checked = path_str in self.checked_items
-                
-                # 상태가 변경된 경우에만 처리
-                if is_checked != was_checked:
-                    if is_checked:
-                        self.checked_items.add(path_str)
-                        if is_dir:
-                            self.checked_dirs += 1
-                        else:
-                            self.checked_files += 1
-                    else:
-                        self.checked_items.discard(path_str)
-                        if is_dir:
-                            self.checked_dirs -= 1
-                        else:
-                            self.checked_files -= 1
-        
-        # 재귀적으로 상위 부모 상태도 업데이트
-        self._update_parent_checked_state(parent)
+                if new_state == Qt.Checked:
+                    self.checked_items.add(path_str)
+                else:
+                    self.checked_items.discard(path_str)
+            
+            # 재귀적으로 상위 부모 상태도 업데이트
+            self._update_parent_checked_state(parent)
     
     def _get_item_path(self, item):
         """
@@ -1376,108 +1328,26 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"토큰 계산 중 오류: {error_msg}", 10000)
     
     def _update_token_count(self):
-        """선택된 항목의 총 토큰 수 계산 및 UI 업데이트"""
-        # 백그라운드 계산이 진행 중이면 중복 계산하지 않음
-        if self.token_thread and self.token_thread.isRunning():
+        """
+        선택된 항목의 총 토큰 수 계산 및 UI 업데이트
+        checked_items 세트를 기반으로 계산
+        """
+        # 토큰 캐시가 비어있으면 계산 불필요
+        if not self.token_cache:
             return
-            
-        self.total_tokens = 0
-        excluded_files = 0
         
-        for path_str in self.checked_items:
-            path = Path(path_str)
-            
-            # 디렉토리는 건너뜀
-            if path.is_dir():
-                continue
-                
-            # 트리 아이템 찾기 (UI에 표시된 정보 확인용)
-            item = self._find_item_by_path(path)
-            
-            # 바이너리 파일이나 오류 상태인 파일은 건너뜀
-            if item and item.data(Qt.UserRole + 1) == True:
-                excluded_files += 1
-                continue
-            
-            # 직접 바이너리 파일 확인 (UI 아이템을 찾지 못한 경우)
-            if not item and is_binary_file(path):
-                excluded_files += 1
-                continue
-                
-            # 캐시된 토큰 수가 있으면 사용
-            if path_str in self.token_cache:
-                self.total_tokens += self.token_cache[path_str]
-                continue
-                
-            # 백그라운드 계산 중이 아닌데 캐시에 없는 경우 계산
-            # 파일 내용 읽기
-            content = read_text_file(path)
-            
-            # 오류 정보가 포함된 딕셔너리인 경우 건너뜀
-            if isinstance(content, dict) and 'error' in content:
-                self.token_cache[path_str] = 0
-                excluded_files += 1
-                continue
-                
-            # 토큰 수 계산 및 캐싱
-            token_count = self.tokenizer.count_tokens(content)
-            self.token_cache[path_str] = token_count
-            self.file_cache[path_str] = content
-            self.total_tokens += token_count
+        # 총 토큰 수 다시 계산
+        self.total_tokens = 0
+        
+        # 체크된 파일만 계산 (디렉토리 제외)
+        checked_files = [path for path in self.checked_items 
+                        if not Path(path).is_dir() and path in self.token_cache]
+        
+        for file_path in checked_files:
+            self.total_tokens += self.token_cache.get(file_path, 0)
         
         # UI 업데이트
         self.total_tokens_count.setText(f"{self.total_tokens:,}")
-        self.selected_files_count.setText(f"{self.checked_files}개")
-        
-        # 제외된 파일이 있으면 상태 표시줄에 정보 표시
-        if excluded_files > 0:
-            self.statusBar().showMessage(f"{excluded_files}개 파일이 토큰 계산에서 제외됨 (바이너리 파일 또는 오류)", 5000)
-        
-        # 복사 버튼 활성화 상태 업데이트
-        self.copy_button.setEnabled(self.checked_files > 0)
-    
-    def _find_item_by_path(self, path: Path) -> Optional[QStandardItem]:
-        """
-        경로에 해당하는 트리 아이템을 찾아 반환
-        
-        Args:
-            path: 찾을 파일/폴더 경로
-            
-        Returns:
-            찾은 QStandardItem 또는 None
-        """
-        if not self.current_folder:
-            return None
-            
-        # 상대 경로 계산
-        try:
-            rel_path = path.relative_to(self.current_folder)
-        except ValueError:
-            return None
-            
-        # 루트부터 시작하여 경로 따라가기
-        parent_item = self.tree_model.item(0)  # 루트 아이템
-        if not parent_item:
-            return None
-            
-        # 경로 파트가 없으면 루트 아이템 자체 반환
-        if len(rel_path.parts) == 0:
-            return parent_item
-            
-        # 각 경로 파트에 대해 자식 아이템 찾기
-        for part in rel_path.parts:
-            found = False
-            for row in range(parent_item.rowCount()):
-                child = parent_item.child(row)
-                if child and child.text() == part:
-                    parent_item = child
-                    found = True
-                    break
-            
-            if not found:
-                return None
-                
-        return parent_item
     
     def _show_about_dialog(self):
         """정보 대화상자 표시"""
@@ -1729,11 +1599,8 @@ class MainWindow(QMainWindow):
     def _on_item_clicked(self, index):
         """
         트리 뷰 항목 클릭 시 호출되는 슬롯
-        - 파일 항목: 체크박스 상태 토글
-        - 폴더 항목: 확장/축소 상태 토글
-        
-        Args:
-            index: 클릭된 항목의 인덱스
+        - 폴더 항목: 확장/축소 기능만 처리
+        - 체크박스는 Qt 기본 이벤트로 처리 
         """
         if not index.isValid():
             return
@@ -1743,39 +1610,17 @@ class MainWindow(QMainWindow):
         if not item:
             return
         
-        # 체크박스 영역에서 클릭이 발생했는지 확인
-        # 체크박스는 트리 뷰의 가장 왼쪽에 위치 (열 0)
-        rect = self.tree_view.visualRect(index)
-        checkbox_rect_x = rect.x() + 3  # 체크박스 위치 추정
-        checkbox_width = 20  # 체크박스 너비 추정
+        # 폴더 항목인지 확인
+        is_directory = item.data(Qt.UserRole)
         
-        click_pos = self.tree_view.mapFromGlobal(QCursor.pos())
-        is_checkbox_clicked = click_pos.x() >= checkbox_rect_x and click_pos.x() <= checkbox_rect_x + checkbox_width
-        
-        if is_checkbox_clicked:
-            # 체크박스 영역을 클릭한 경우 체크박스 상태 토글
-            if item.isCheckable():
-                current_state = item.checkState()
-                new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
-                item.setCheckState(new_state)
-        else:
-            # 폴더 항목인지 확인 (UserRole 데이터가 True인 경우 디렉토리)
-            is_directory = item.data(Qt.UserRole)
-            
-            if is_directory:
-                # 폴더 항목인 경우 확장/축소 토글
-                if self.tree_view.isExpanded(index):
-                    self.tree_view.collapse(index)
-                else:
-                    self.tree_view.expand(index)
+        if is_directory:
+            # 폴더 항목인 경우 확장/축소 토글
+            if self.tree_view.isExpanded(index):
+                self.tree_view.collapse(index)
             else:
-                # 파일 항목인 경우 체크박스 상태 토글
-                if item.isCheckable():
-                    current_state = item.checkState()
-                    new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
-                    item.setCheckState(new_state)
+                self.tree_view.expand(index)
         
-        # 체크 상태 변경에 따른 처리는 itemChanged 시그널에 연결된 _on_item_changed 메서드에서 수행됨
+        # 체크박스 상태 변경은 Qt 기본 이벤트에 의해 itemChanged 시그널로 처리됨
     
     def _on_item_double_clicked(self, index):
         """
@@ -1786,4 +1631,63 @@ class MainWindow(QMainWindow):
             index: 더블클릭된 항목의 인덱스
         """
         pass  # 더이상 사용하지 않음
+    
+    def _update_check_stats(self):
+        """checked_items 세트를 기반으로 파일/폴더 카운트 업데이트"""
+        self.checked_files = 0
+        self.checked_dirs = 0
+        
+        for path_str in self.checked_items:
+            path = Path(path_str)
+            if path.is_dir():
+                self.checked_dirs += 1
+            else:
+                self.checked_files += 1
+        
+        # UI 업데이트
+        self.selected_files_count.setText(f"{self.checked_files}개")
+        self.copy_button.setEnabled(self.checked_files > 0)
+    
+    def _find_item_by_path(self, path: Path) -> Optional[QStandardItem]:
+        """
+        경로에 해당하는 트리 아이템을 찾아 반환
+        
+        Args:
+            path: 찾을 파일/폴더 경로
+            
+        Returns:
+            찾은 QStandardItem 또는 None
+        """
+        if not self.current_folder:
+            return None
+            
+        # 상대 경로 계산
+        try:
+            rel_path = path.relative_to(self.current_folder)
+        except ValueError:
+            return None
+            
+        # 루트부터 시작하여 경로 따라가기
+        parent_item = self.tree_model.item(0)  # 루트 아이템
+        if not parent_item:
+            return None
+            
+        # 경로 파트가 없으면 루트 아이템 자체 반환
+        if len(rel_path.parts) == 0:
+            return parent_item
+            
+        # 각 경로 파트에 대해 자식 아이템 찾기
+        for part in rel_path.parts:
+            found = False
+            for row in range(parent_item.rowCount()):
+                child = parent_item.child(row)
+                if child and child.text() == part:
+                    parent_item = child
+                    found = True
+                    break
+            
+            if not found:
+                return None
+                
+        return parent_item
     
