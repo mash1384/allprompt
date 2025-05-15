@@ -591,10 +591,198 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
+        # Modern style sheet
+        self.setStyleSheet("""
+            QMainWindow, QWidget {
+                background-color: #1E1E1E;
+                color: #E0E0E0;
+            }
+            
+            QLabel {
+                color: #E0E0E0;
+            }
+            
+            QLabel[infoLabel="true"] {
+                color: #BBBBBB;
+                font-size: 14px;
+            }
+            
+            QLabel[infoValue="true"] {
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            
+            QLabel#panelHeader {
+                color: #FFFFFF;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px 0px;
+                border-bottom: 1px solid #3C3C3C;
+                margin-bottom: 8px;
+            }
+            
+            QLabel#pathLabel {
+                color: #BBBBBB;
+                background-color: #2A2A2A;
+                border-radius: 4px;
+                padding: 4px 8px;
+            }
+            
+            QPushButton {
+                background-color: #2D2D30;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            
+            QPushButton:hover {
+                background-color: #3E3E42;
+            }
+            
+            QPushButton:pressed {
+                background-color: #1E1E1E;
+            }
+            
+            QPushButton:disabled {
+                background-color: #2D2D30;
+                color: #6D6D6D;
+            }
+            
+            QPushButton#openFolderButton, QPushButton#copyButton, QPushButton#clearButton {
+                background-color: transparent;
+                border: 1px solid #555555;
+                font-size: 14px;
+                color: #DDDDDD;
+                text-align: left;
+                padding-left: 36px;
+            }
+            
+            QPushButton#openFolderButton:hover, QPushButton#copyButton:hover, QPushButton#clearButton:hover {
+                background-color: rgba(255, 255, 255, 0.05);
+                border: 1px solid #777777;
+            }
+            
+            QPushButton#openFolderButton:pressed, QPushButton#copyButton:pressed, QPushButton#clearButton:pressed {
+                background-color: rgba(0, 0, 0, 0.1);
+            }
+            
+            QTreeView {
+                background-color: #252526;
+                alternate-background-color: #2D2D30;
+                border: 1px solid #3C3C3C;
+                border-radius: 6px;
+                padding: 4px;
+                selection-background-color: #264F78;
+            }
+            
+            QTreeView::item {
+                padding: 4px;
+                border-radius: 4px;
+            }
+            
+            QTreeView::item:hover {
+                background-color: #2A2D2E;
+                border: 1px solid #3C3C3C;
+            }
+            
+            QTreeView::item:selected {
+                background-color: #264F78;
+            }
+            
+            QScrollBar:vertical {
+                border: none;
+                background: #2A2A2A;
+                width: 10px;
+                border-radius: 5px;
+            }
+            
+            QScrollBar::handle:vertical {
+                background: #5A5A5A;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            
+            QScrollBar:horizontal {
+                border: none;
+                background: #2A2A2A;
+                height: 10px;
+                border-radius: 5px;
+            }
+            
+            QScrollBar::handle:horizontal {
+                background: #5A5A5A;
+                min-width: 20px;
+                border-radius: 5px;
+            }
+            
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+            
+            QSplitter::handle {
+                background-color: #3C3C3C;
+            }
+            
+            QStatusBar {
+                background-color: #2D2D30;
+                color: #BBBBBB;
+            }
+            
+            QProgressBar {
+                border: none;
+                border-radius: 4px;
+                background-color: #333333;
+                text-align: center;
+                color: white;
+            }
+            
+            QProgressBar::chunk {
+                background-color: #007ACC;
+                border-radius: 4px;
+            }
+            
+            QMenu {
+                background-color: #2D2D30;
+                border: 1px solid #3C3C3C;
+            }
+            
+            QMenu::item {
+                padding: 6px 25px 6px 25px;
+                color: #CCCCCC;
+            }
+            
+            QMenu::item:selected {
+                background-color: #3E3E42;
+                color: #FFFFFF;
+            }
+            
+            QMenuBar {
+                background-color: #2D2D30;
+                color: #CCCCCC;
+            }
+            
+            QMenuBar::item {
+                padding: 6px 10px;
+                background: transparent;
+            }
+            
+            QMenuBar::item:selected {
+                background-color: #3E3E42;
+                color: #FFFFFF;
+            }
+        """)
+        
         # Main layout (vertical)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)  # Layout element spacing
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(12)  # Layout element spacing
         
         # Left-right panel splitter
         splitter = QSplitter(Qt.Horizontal)
@@ -605,7 +793,7 @@ class MainWindow(QMainWindow):
         left_panel = QWidget()
         left_panel.setObjectName("leftPanel")
         left_panel_layout = QVBoxLayout(left_panel)
-        left_panel_layout.setContentsMargins(8, 8, 8, 8)
+        left_panel_layout.setContentsMargins(10, 10, 10, 10)
         
         # Size policy setup (horizontal/vertical expansion)
         left_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -631,22 +819,6 @@ class MainWindow(QMainWindow):
         
         # Allow mouse event propagation
         self.tree_view.setAttribute(Qt.WA_NoMousePropagation, False)
-        
-        # Apply inline style (add gray border effect on hover)
-        inline_style = """
-            QTreeView::item:hover { 
-                border: 1px solid #8E8E8E; 
-                background-color: transparent;
-            }
-            QTreeView::branch:hover { 
-                background-color: transparent;
-            }
-            QTreeView::indicator {
-                border: 1px solid #5A6374;
-                background-color: #1A1D23;
-            }
-        """
-        self.tree_view.setStyleSheet(inline_style)
         
         # Using custom signals instead of the default clicked signal
         self.tree_view.item_clicked.connect(self._on_item_clicked)
@@ -676,7 +848,7 @@ class MainWindow(QMainWindow):
         right_panel = QWidget()
         right_panel.setObjectName("rightPanel")
         right_panel_layout = QVBoxLayout(right_panel)
-        right_panel_layout.setContentsMargins(8, 8, 8, 8)
+        right_panel_layout.setContentsMargins(10, 10, 10, 10)
         
         # Size policy setup (fixed horizontal, expanding vertical)
         right_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -686,18 +858,20 @@ class MainWindow(QMainWindow):
         folder_header.setObjectName("panelHeader")
         right_panel_layout.addWidget(folder_header)
         
-        # Folder open button and path layout - 수평 레이아웃으로 변경
+        # Folder open button and path layout
         folder_group = QWidget()
         folder_layout = QVBoxLayout(folder_group)
         folder_layout.setContentsMargins(0, 0, 0, 0)
+        folder_layout.setSpacing(10)  # Add spacing between elements
         
         # Open folder button
         self.open_folder_button = QPushButton("Open Folder")
         self.open_folder_button.setObjectName("openFolderButton")
         self.open_folder_button.setIcon(self.folder_icon)
         self.open_folder_button.clicked.connect(self._open_folder_dialog)
-        # 버튼의 크기 정책 설정 - 너비를 채우도록
+        # Button size policy setup - fill width
         self.open_folder_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.open_folder_button.setMinimumHeight(40)  # Increase button height
         folder_layout.addWidget(self.open_folder_button)
         
         # 현재 폴더 경로를 표시할 수평 레이아웃 생성
@@ -707,7 +881,7 @@ class MainWindow(QMainWindow):
         # Current folder path label
         folder_path_label = QLabel("Current folder:")
         folder_path_label.setProperty("infoLabel", True)
-        folder_path_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        folder_path_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         current_folder_hbox_layout.addWidget(folder_path_label)
         
         self.folder_path = QLabel("No folder selected")
@@ -732,7 +906,7 @@ class MainWindow(QMainWindow):
         info_container = QWidget()
         info_layout = QVBoxLayout(info_container)
         info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(8)  # Info item spacing
+        info_layout.setSpacing(12)  # Increase info item spacing
         
         info_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         
@@ -766,13 +940,13 @@ class MainWindow(QMainWindow):
         total_tokens_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         token_count_layout.addWidget(total_tokens_label)
         
-        token_count_layout.addStretch(1)  # 스트레치 추가하여 값을 오른쪽으로 정렬
+        token_count_layout.addStretch(1)  # Add stretch to align value to the right
         
         self.total_tokens_count = QLabel("0")
         self.total_tokens_count.setProperty("infoValue", True)
         self.total_tokens_count.setObjectName("total_tokens_count")  # ID 변경
-        self.total_tokens_count.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)  # 최소 크기로 변경
-        self.total_tokens_count.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # 텍스트 오른쪽 정렬
+        self.total_tokens_count.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)  # Minimum size
+        self.total_tokens_count.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # Right align text
         token_count_layout.addWidget(self.total_tokens_count)
         
         info_layout.addWidget(token_count_group)
@@ -788,31 +962,34 @@ class MainWindow(QMainWindow):
         action_container = QWidget()
         action_layout = QVBoxLayout(action_container)
         action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.setSpacing(10)  # Add spacing between buttons
         
         # Copy to clipboard button
         self.copy_button = QPushButton("Copy to Clipboard")
         self.copy_button.setObjectName("copyButton")
-        self.copy_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        # 아이콘 위치 설정
-        self.copy_button.setIconSize(QSize(18, 18))  # 아이콘 크기 조정
-        self.copy_button.setLayoutDirection(Qt.LeftToRight)  # 아이콘을 텍스트 왼쪽에 배치
+        # Use a simple document icon for copy button
+        self.copy_button.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
+        # Icon setup
+        self.copy_button.setIconSize(QSize(20, 20))
+        self.copy_button.setLayoutDirection(Qt.LeftToRight)
         self.copy_button.clicked.connect(self._copy_to_clipboard)
         self.copy_button.setEnabled(False)  # Initially disabled
-        # Copy button size policy setup (horizontal expansion)
+        # Copy button size policy
         self.copy_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.copy_button.setMinimumHeight(40)  # Button height setup
+        self.copy_button.setMinimumHeight(44)
         action_layout.addWidget(self.copy_button)
         
         # Clear selection button
         self.clear_button = QPushButton("Clear Selection")
         self.clear_button.setObjectName("clearButton")
-        self.clear_button.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
-        self.clear_button.setIconSize(QSize(18, 18))
+        # Use a simple X icon for clear button
+        self.clear_button.setIcon(self.style().standardIcon(QStyle.SP_DialogCloseButton))
+        self.clear_button.setIconSize(QSize(20, 20))
         self.clear_button.setLayoutDirection(Qt.LeftToRight)
         self.clear_button.clicked.connect(self._clear_selection)
         self.clear_button.setEnabled(False)  # Initially disabled
         self.clear_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.clear_button.setMinimumHeight(40)
+        self.clear_button.setMinimumHeight(44)
         action_layout.addWidget(self.clear_button)
         
         right_panel_layout.addWidget(action_container)
@@ -825,7 +1002,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(right_panel)
         
         # Set window minimum size (more spacious)
-        self.setMinimumSize(900, 650)
+        self.setMinimumSize(1000, 700)
         
         # Set splitter initial size ratio (left:right = 7:3)
         splitter.setSizes([700, 300])
@@ -838,6 +1015,7 @@ class MainWindow(QMainWindow):
         
         # Create status bar
         status_bar = QStatusBar()
+        status_bar.setFixedHeight(24)  # Set a fixed height for the status bar
         self.setStatusBar(status_bar)
         
         # Status message label
@@ -852,27 +1030,21 @@ class MainWindow(QMainWindow):
         # Create menu bar
         self._create_menu()
         
-        # 윈도우 크기 및 제목 설정
+        # Window size and title
         self.setWindowTitle("LLM Prompt Helper")
-        self.resize(1200, 800)  # 초기 윈도우 크기 (좀 더 넓게)
+        self.resize(1200, 800)  # Initial window size
         
-        # 윈도우 아이콘 설정
+        # Window icon
         self.setWindowIcon(self.style().standardIcon(QStyle.SP_FileDialogInfoView))
         
-        # 상태 표시줄 초기 메시지
-        self.statusBar().showMessage("준비됨", 3000)
+        # Status bar initial message
+        self.statusBar().showMessage("Ready", 3000)
         
-        # 중앙에 윈도우 배치
+        # Center window on screen
         self._center_window()
         
-        # UI 초기화 완료 로그
-        logger.info("UI 초기화 완료")
-        
-        # 스타일시트를 통해 사용자 정의 스타일 적용
-        # (resources.py에 컴파일된 QSS 파일 사용)
-        
-        # 주의: QTreeView에는 setTristate 메소드가 없음
-        # 부분 체크 상태는 _on_item_changed 및 _update_parent_checked_state 메소드에서 수동으로 처리
+        # Log UI initialization
+        logger.info("UI initialized")
     
     def _create_menu(self):
         """Create menu bar"""
