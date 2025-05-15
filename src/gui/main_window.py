@@ -748,7 +748,7 @@ class MainWindow(QMainWindow):
         # 폴더 열기 버튼
         self.open_folder_button = QPushButton("폴더 열기")
         self.open_folder_button.setObjectName("openFolderButton")
-        self.open_folder_button.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
+        self.open_folder_button.setIcon(self.folder_icon)
         self.open_folder_button.clicked.connect(self._open_folder_dialog)
         folder_layout.addWidget(self.open_folder_button)
         
