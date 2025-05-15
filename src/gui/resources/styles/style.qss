@@ -19,7 +19,7 @@
  */
 
 /* -------------- 폰트 설정 --------------
- * 기본 폰트: Inter, 시스템 산세리프 폰트
+ * 기본 폰트: 시스템 산세리프 폰트
  * 기본 텍스트 크기: 13px
  * 헤더/제목: 14-15px
  * 작은 텍스트: 12px
@@ -35,16 +35,16 @@
  */
 
 /* -------------- 애니메이션 설정 --------------
- * 상태 변화: 150ms ease-in-out
- * 색상 변화: 180ms ease-out
- * 크기 변화: 120ms ease-in-out
+ * 상태 변화: 150ms
+ * 색상 변화: 180ms
+ * 크기 변화: 120ms
  */
 
 /* 전체 애플리케이션 스타일 */
 QWidget {
     background-color: #1E1E1E;
     color: #D0D0D0;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
 }
 
@@ -62,7 +62,6 @@ QSplitter::handle {
 
 QSplitter::handle:hover {
     background-color: #007ACC;
-    transition: background-color 180ms ease;
 }
 
 /* 패널 스타일 (QWidget 내부 패널) */
@@ -70,16 +69,16 @@ QWidget#leftPanel, QWidget#rightPanel {
     background-color: #252526;
     border: none;
     margin: 4px;
-    padding: 6px;
+    padding: 15px;
 }
 
 /* 패널 헤더 스타일 */
 QLabel#panelHeader {
     font-size: 14px;
-    font-weight: medium;
-    color: #D0D0D0;
-    margin-bottom: 8px;
-    padding-bottom: 6px;
+    font-weight: bold;
+    color: #E0E0E0;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
     border-bottom: 1px solid #333333;
 }
 
@@ -93,7 +92,6 @@ QMenuBar {
 QMenuBar::item {
     background-color: transparent;
     padding: 6px 8px;
-    transition: color 150ms ease-in-out;
 }
 
 QMenuBar::item:selected {
@@ -112,7 +110,6 @@ QMenu::item {
     padding: 6px 24px 6px 20px;
     border-radius: 2px;
     margin: 2px;
-    transition: background-color 150ms ease-in-out, color 150ms ease-in-out;
 }
 
 QMenu::item:selected {
@@ -146,7 +143,6 @@ QPushButton {
     min-width: 80px;
     text-align: center;
     font-weight: normal;
-    transition: background-color 150ms ease-in-out, border-color 150ms ease-in-out;
 }
 
 QPushButton:hover {
@@ -174,26 +170,26 @@ QPushButton:disabled {
 
 /* 주요 액션 버튼 (복사 버튼 등) */
 QPushButton#copyButton {
-    background-color: #007ACC;
+    background-color: #007ACC; /* 주요 액션 강조색 */
     color: #FFFFFF;
     border: none;
-    font-weight: 500;
-    padding: 8px 12px;
-    font-size: 13px;
-    min-width: 120px;
-    transition: background-color 150ms ease-in-out;
+    border-radius: 4px;
+    padding: 10px 15px; /* 패딩 증가 */
+    font-weight: 500; /* 약간 굵게 */
+    font-size: 14px;
+    /* text-align: left; 아이콘이 왼쪽에 있다면 */
 }
 
 QPushButton#copyButton:hover {
-    background-color: #1B90E0;
+    background-color: #005A9E; /* 호버 시 약간 어둡게 */
 }
 
 QPushButton#copyButton:pressed {
     background-color: #005F9E;
-    padding-top: 9px;
-    padding-left: 13px;
-    padding-bottom: 7px;
-    padding-right: 11px;
+    padding-top: 11px;
+    padding-left: 16px;
+    padding-bottom: 9px;
+    padding-right: 14px;
 }
 
 QPushButton#copyButton:disabled {
@@ -203,14 +199,17 @@ QPushButton#copyButton:disabled {
 
 /* 폴더 열기 버튼 */
 QPushButton#openFolderButton {
-    background-color: #2D2D2D;
-    padding: 8px 12px;
-    font-weight: normal;
-    min-width: 100px;
+    background-color: #2D2D2D; /* 어두운 버튼 배경 */
+    color: #D0D0D0;
+    border: 1px solid #444444; /* 미묘한 테두리 */
+    border-radius: 4px; /* 약간 둥근 모서리 */
+    padding: 8px 12px; /* 아이콘과 텍스트 고려한 패딩 */
+    text-align: left; /* 텍스트 왼쪽 정렬 (아이콘 공간 확보) */
 }
 
 QPushButton#openFolderButton:hover {
     background-color: #3A3A3A;
+    border-color: #555555;
 }
 
 /* 세컨더리 버튼 */
@@ -318,19 +317,19 @@ QTreeView::branch:selected {
     background-color: transparent;
 }
 
-/* 브랜치 아이콘 스타일 추가 */
+/* 브랜치 아이콘 스타일 개선 */
 QTreeView::branch:has-children:!has-siblings:closed,
 QTreeView::branch:closed:has-children:has-siblings {
     border-image: none;
     image: url(:/icons/branch_closed.svg);
-    padding: 1px;
+    padding: 2px;
 }
 
 QTreeView::branch:open:has-children:!has-siblings,
 QTreeView::branch:open:has-children:has-siblings {
     border-image: none;
     image: url(:/icons/branch_open.svg);
-    padding: 1px;
+    padding: 2px;
 }
 
 /* 체크박스 스타일 */
@@ -406,7 +405,6 @@ QCheckBox {
     spacing: 6px;
     color: #D0D0D0;
     padding: 3px 0;
-    transition: color 150ms ease-in-out;
 }
 
 QCheckBox:hover {
@@ -419,7 +417,6 @@ QCheckBox::indicator {
     border-radius: 2px;
     border: 1px solid #5D5D5D;
     background-color: #252526;
-    transition: border-color 150ms ease-in-out, background-color 150ms ease-in-out;
 }
 
 QCheckBox::indicator:unchecked {
@@ -499,10 +496,10 @@ QRadioButton::indicator:disabled {
 }
 
 /* 정보 표시 레이블 스타일 */
-QLabel#infoGroupLabel {
-    color: #AEAEAE;
+QLabel[infoLabel="true"] { /* "Current folder:", "Selected files:", "Total tokens:" 공통 적용 */
+    color: #AAAAAA; /* 약간 어두운 텍스트 색상 */
+    padding-right: 8px; /* 값과의 간격 */
     font-size: 13px;
-    margin-top: 6px;
 }
 
 QLabel#infoValueLabel {
@@ -513,13 +510,12 @@ QLabel#infoValueLabel {
 
 /* 경로 표시 레이블 */
 QLabel#pathLabel {
-    color: #AEAEAE;
-    font-size: 12px;
-    background-color: #252526;
-    border-radius: 3px;
-    padding: 6px;
-    selection-background-color: #333333;
-    border: 1px solid #333333;
+    background-color: #2D2D2D; /* 입력 필드와 유사한 배경 */
+    color: #D0D0D0;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 6px 8px; /* 내부 여백 */
+    font-size: 13px;
 }
 
 /* 스크롤바 스타일 */
@@ -627,14 +623,22 @@ QLabel[groupHeader="true"] {
 }
 
 /* 정보 레이블 : 값 쌍 */
-QLabel[infoLabel="true"] {
-    color: #AEAEAE;
-    padding-right: 6px;
+QLabel[infoLabel="true"] { /* "Current folder:", "Selected files:", "Total tokens:" 공통 적용 */
+    color: #AAAAAA; /* 약간 어두운 텍스트 색상 */
+    padding-right: 8px; /* 값과의 간격 */
+    font-size: 13px;
 }
 
 QLabel[infoValue="true"] {
-    color: #D0D0D0;
-    font-weight: normal;
+    color: #D0D0D0; /* 기본 텍스트 색상 */
+    font-weight: bold; /* 값 강조 */
+    font-size: 13px;
+    /* text-align: right; /* 필요시 QLabel 자체 정렬 (QHBoxLayout 사용 시 불필요할 수 있음) */
+}
+
+/* 특정 값(예: 토큰)에 다른 색상을 주려면 ID나 다른 속성으로 구분 */
+QLabel#total_tokens_count { /* 예시 ID */
+    color: #007ACC; /* 강조색 */
 }
 
 /* 알림 레이블 스타일 */
@@ -693,7 +697,6 @@ QProgressBar {
 QProgressBar::chunk {
     background-color: #007ACC;
     border-radius: 2px;
-    transition: width 180ms ease-in-out;
 }
 
 /* 모달 대화 상자 스타일 */
@@ -791,7 +794,6 @@ QLineEdit, QTextEdit {
     padding: 6px;
     selection-background-color: #264F78;
     selection-color: #FFFFFF;
-    transition: border-color 150ms ease-in-out, background-color 150ms ease-in-out;
 }
 
 QLineEdit:hover, QTextEdit:hover {

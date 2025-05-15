@@ -36,8 +36,6 @@ from src.core.filter import GitignoreFilter
 from src.core.output_formatter import generate_file_map, generate_file_contents, generate_full_output
 # 클립보드 유틸리티 모듈 임포트
 from src.utils.clipboard_utils import copy_to_clipboard
-from src.utils.settings_manager import SettingsManager
-from src.gui.settings_dialog import SettingsDialog
 from src.core.sort_utils import sort_items  # 정렬 유틸리티 임포트
 
 logger = logging.getLogger(__name__)
@@ -486,76 +484,48 @@ class MainWindow(QMainWindow):
     """메인 애플리케이션 윈도우"""
     
     def __init__(self):
-        """메인 윈도우 초기화"""
+        """Initialize the main window"""
         super().__init__()
         
-        # 아이콘 초기화
-        self._init_icons()
+        self.setWindowTitle("LLM Prompt Helper")
         
-        # 설정 관리자 초기화
-        self.settings_manager = SettingsManager()
-        
-        # 커스텀 호버 없는 스타일 적용
-        # self.custom_style = NoHoverStyle()
-        
-        # 기본 UI 설정
-        self.setWindowTitle("LLM 프롬프트 헬퍼")
-        self.setMinimumSize(800, 600)
-        
-        # 중앙 위젯 및 레이아웃 설정
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        
-        # 진행 표시줄 설정
+        # Initialize progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
-        self.progress_bar.setVisible(False)
+        self.progress_bar.setValue(0)
         
-        # 토크나이저 초기화
-        model_name = self.settings_manager.get_setting("model_name", "gpt-3.5-turbo")
-        self.tokenizer = Tokenizer(model_name)
+        # Initialize selection tracking
+        self.checked_items = set()  # Paths of checked items
+        self.checked_files = 0      # Number of checked files
+        self.checked_dirs = 0       # Number of checked directories
         
-        # 트리 뷰 모델 설정
-        self.tree_model = QStandardItemModel()
-        self.tree_model.setHorizontalHeaderLabels(['파일/폴더'])
+        # Initialize folder state
+        self.current_folder = None  # Current directory
+        self.gitignore_filter = None  # .gitignore filter
+        self.show_hidden = False  # Hidden files display
         
-        # 체크된 아이템 추적
-        self.checked_items = set()
-        self.checked_files = 0
-        self.checked_dirs = 0
+        # Initialize tokenizer
+        self.tokenizer = Tokenizer()  # Default tokenizer
         
-        # 체크 이벤트 처리 플래그
-        self._processing_check_event = False
+        # Initialize caches
+        self.token_cache = {}  # Cache for token counts {file_path: token_count}
+        self.file_cache = {}   # Cache for file contents {file_path: content}
+        self.total_tokens = 0  # Total token count for selected files
         
-        # 아이템 경로-객체 매핑
-        self.item_path_map = {}
-        
-        # 토큰 계산 관련 변수
-        self.token_cache = {}  # 파일 경로 -> 토큰 수 매핑
-        self.total_tokens = 0
-        self.file_cache = {}   # 파일 경로 -> 파일 내용 매핑
-        
-        # 현재 로드된 폴더
-        self.current_folder = None
-        
-        # .gitignore 필터
-        self.gitignore_filter = None
-        
-        # 토큰화 스레드 초기화
+        # Initialize token calculation thread
         self.token_thread = None
         
-        # UI 초기화
+        # Initialize icons
+        self._init_icons()
+        
+        # Initialize UI components
         self._init_ui()
         
-        # 메뉴 생성
-        self._create_menu()
+        # Center the window on screen
+        self._center_window()
         
-        # 기본 상태 메시지 설정
-        self.statusBar().showMessage("폴더를 선택하세요.", 5000)
+        logger.info("Main window initialized")
         
-        logger.info("메인 윈도우 초기화 완료")
-    
     def _init_icons(self):
         """아이콘 리소스 초기화"""
         # 커스텀 SVG 아이콘 사용
@@ -615,54 +585,54 @@ class MainWindow(QMainWindow):
     
     def _init_ui(self):
         """
-        UI 구성 요소 초기화
+        Initialize UI components
         """
-        # 중앙 위젯 설정
+        # Central widget setup
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # 메인 레이아웃 (수직)
+        # Main layout (vertical)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)  # 레이아웃 요소 간 간격
+        main_layout.setSpacing(10)  # Layout element spacing
         
-        # 좌우 패널 스플리터 생성
+        # Left-right panel splitter
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(2)  # 스플리터 핸들 너비 설정
-        splitter.setChildrenCollapsible(False)  # 자식 위젯이 완전히 축소되지 않도록 설정
+        splitter.setHandleWidth(2)  # Splitter handle width
+        splitter.setChildrenCollapsible(False)  # Prevent children from being fully collapsed
         
-        # ===== 좌측 패널 (파일 트리 뷰) =====
+        # ===== Left Panel (File Tree View) =====
         left_panel = QWidget()
         left_panel.setObjectName("leftPanel")
         left_panel_layout = QVBoxLayout(left_panel)
         left_panel_layout.setContentsMargins(8, 8, 8, 8)
         
-        # 크기 정책 설정 (수평/수직 확장)
+        # Size policy setup (horizontal/vertical expansion)
         left_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        # 파일/폴더 헤더 레이블
-        files_header = QLabel("파일/폴더")
+        # Files/folders header label
+        files_header = QLabel("Files/Folders")
         files_header.setObjectName("panelHeader")
         left_panel_layout.addWidget(files_header)
         
-        # 파일 트리 뷰 - 커스텀 트리 뷰 사용
+        # File tree view - using custom tree view
         self.tree_view = CustomTreeView()
         self.tree_view.setSelectionMode(QTreeView.NoSelection)
         self.tree_view.setAlternatingRowColors(False)
         self.tree_view.setUniformRowHeights(True)
         self.tree_view.header().setVisible(False)
         self.tree_view.setTextElideMode(Qt.ElideMiddle)
-        self.tree_view.setAttribute(Qt.WA_MacShowFocusRect, False)  # macOS 포커스 사각형 제거
-        self.tree_view.setFocusPolicy(Qt.NoFocus)  # 포커스 효과 제거
-        self.tree_view.setMouseTracking(True)  # 마우스 추적 활성화 (호버 효과 활성화)
+        self.tree_view.setAttribute(Qt.WA_MacShowFocusRect, False)  # Remove macOS focus rectangle
+        self.tree_view.setFocusPolicy(Qt.NoFocus)  # Remove focus effects
+        self.tree_view.setMouseTracking(True)  # Enable mouse tracking (for hover effects)
         
-        # 더블클릭으로 편집되지 않도록 설정
+        # Prevent editing by double-click
         self.tree_view.setEditTriggers(QTreeView.NoEditTriggers)
         
-        # 마우스 이벤트 전파 허용
+        # Allow mouse event propagation
         self.tree_view.setAttribute(Qt.WA_NoMousePropagation, False)
         
-        # 인라인 스타일 적용 (호버 시 회색 테두리 효과 추가)
+        # Apply inline style (add gray border effect on hover)
         inline_style = """
             QTreeView::item:hover { 
                 border: 1px solid #8E8E8E; 
@@ -678,228 +648,212 @@ class MainWindow(QMainWindow):
         """
         self.tree_view.setStyleSheet(inline_style)
         
-        # 기존 clicked 시그널 연결 대신 커스텀 시그널 사용
+        # Using custom signals instead of the default clicked signal
         self.tree_view.item_clicked.connect(self._on_item_clicked)
         
-        # 트리 뷰의 크기 정책 설정 (수평/수직 확장)
+        # Tree view size policy setup (horizontal/vertical expansion)
         self.tree_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        # 트리 뷰 아이템 모델 생성
+        # Create tree view item model
         self.tree_model = QStandardItemModel()
-        self.tree_model.setHorizontalHeaderLabels(["파일/폴더"])
+        self.tree_model.setHorizontalHeaderLabels(["Files/Folders"])
         self.tree_view.setModel(self.tree_model)
         
-        # 트리 뷰 이벤트 연결
+        # Connect tree view events
         self.tree_model.itemChanged.connect(self._on_item_changed)
         
-        # 커스텀 델리게이트 설정 (체크박스 스타일링을 위해 유지)
+        # Set custom delegate (for checkbox styling)
         self.checkable_delegate = CheckableItemDelegate()
         self.tree_view.setItemDelegate(self.checkable_delegate)
         
-        # 폴더 확장/축소 이벤트 연결
+        # Connect folder expansion/collapse events
         self.tree_view.expanded.connect(self._on_item_expanded)
         self.tree_view.collapsed.connect(self._on_item_collapsed)
         
         left_panel_layout.addWidget(self.tree_view)
         
-        # 필터 옵션 컨테이너
-        filter_container = QWidget()
-        filter_layout = QVBoxLayout(filter_container)
-        filter_layout.setContentsMargins(0, 8, 0, 0)
-        
-        # 필터 옵션 헤더 레이블
-        filter_header = QLabel("필터 옵션")
-        filter_header.setProperty("groupHeader", True)
-        filter_layout.addWidget(filter_header)
-        
-        # 숨김 파일/폴더 표시 체크박스
-        self.show_hidden_files_cb = QCheckBox("숨김 파일/폴더 표시")
-        self.show_hidden_files_cb.setChecked(False)
-        self.show_hidden_files_cb.stateChanged.connect(self._toggle_hidden_files)
-        filter_layout.addWidget(self.show_hidden_files_cb)
-        
-        # .gitignore 규칙 적용 체크박스
-        self.apply_gitignore_cb = QCheckBox(".gitignore 규칙 적용")
-        self.apply_gitignore_cb.setChecked(True)
-        self.apply_gitignore_cb.stateChanged.connect(self._toggle_gitignore_filter)
-        filter_layout.addWidget(self.apply_gitignore_cb)
-        
-        left_panel_layout.addWidget(filter_container)
-        
-        # ===== 우측 패널 (정보 및 액션) =====
+        # ===== Right Panel (Info and Actions) =====
         right_panel = QWidget()
         right_panel.setObjectName("rightPanel")
         right_panel_layout = QVBoxLayout(right_panel)
         right_panel_layout.setContentsMargins(8, 8, 8, 8)
         
-        # 크기 정책 설정 (수평 고정, 수직 확장)
+        # Size policy setup (fixed horizontal, expanding vertical)
         right_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         
-        # 폴더 선택 그룹
-        folder_header = QLabel("폴더 선택")
+        # Folder selection group
+        folder_header = QLabel("Folder Selection")
         folder_header.setObjectName("panelHeader")
         right_panel_layout.addWidget(folder_header)
         
-        # 폴더 열기 버튼 및 경로 표시
+        # Folder open button and path layout - 수평 레이아웃으로 변경
         folder_group = QWidget()
         folder_layout = QVBoxLayout(folder_group)
         folder_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 폴더 열기 버튼
-        self.open_folder_button = QPushButton("폴더 열기")
+        # Open folder button
+        self.open_folder_button = QPushButton("Open Folder")
         self.open_folder_button.setObjectName("openFolderButton")
         self.open_folder_button.setIcon(self.folder_icon)
         self.open_folder_button.clicked.connect(self._open_folder_dialog)
+        # 버튼의 크기 정책 설정 - 너비를 채우도록
+        self.open_folder_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         folder_layout.addWidget(self.open_folder_button)
         
-        # 현재 폴더 경로 레이블
-        folder_path_label = QLabel("현재 폴더:")
-        folder_path_label.setProperty("infoLabel", True)
-        folder_layout.addWidget(folder_path_label)
+        # 현재 폴더 경로를 표시할 수평 레이아웃 생성
+        current_folder_hbox_layout = QHBoxLayout()
+        current_folder_hbox_layout.setContentsMargins(0, 4, 0, 0)
         
-        self.folder_path = QLabel("선택된 폴더 없음")
+        # Current folder path label
+        folder_path_label = QLabel("Current folder:")
+        folder_path_label.setProperty("infoLabel", True)
+        folder_path_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        current_folder_hbox_layout.addWidget(folder_path_label)
+        
+        self.folder_path = QLabel("No folder selected")
         self.folder_path.setObjectName("pathLabel")
         self.folder_path.setWordWrap(True)
         self.folder_path.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        # 경로 레이블 크기 정책 설정 (수평 확장)
+        # Path label size policy setup (horizontal expansion)
         self.folder_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        folder_layout.addWidget(self.folder_path)
+        current_folder_hbox_layout.addWidget(self.folder_path)
+        
+        # 수평 레이아웃을 수직 레이아웃에 추가
+        folder_layout.addLayout(current_folder_hbox_layout)
         
         right_panel_layout.addWidget(folder_group)
         
-        # 선택 정보 그룹
-        info_header = QLabel("선택 정보")
+        # Selection info group
+        info_header = QLabel("Selection Info")
         info_header.setObjectName("panelHeader")
         right_panel_layout.addWidget(info_header)
         
-        # 정보 표시 컨테이너 개선
+        # Info display container improvement
         info_container = QWidget()
         info_layout = QVBoxLayout(info_container)
         info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(8)  # 정보 항목 간 간격 설정
+        info_layout.setSpacing(8)  # Info item spacing
         
         info_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         
-        # 선택된 파일 수
+        # Selected file count
         file_count_group = QWidget()
         file_count_layout = QHBoxLayout(file_count_group)
         file_count_layout.setContentsMargins(0, 4, 0, 4)
         
-        selected_files_label = QLabel("선택된 파일:")
+        selected_files_label = QLabel("Selected files:")
         selected_files_label.setProperty("infoLabel", True)
-        selected_files_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        selected_files_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         file_count_layout.addWidget(selected_files_label)
         
-        self.selected_files_count = QLabel("0개")
+        file_count_layout.addStretch(1)  # Add stretch to align value to the right
+        
+        self.selected_files_count = QLabel("0")
         self.selected_files_count.setProperty("infoValue", True)
-        self.selected_files_count.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.selected_files_count.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)  # Minimum size
+        self.selected_files_count.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # Right align text
         file_count_layout.addWidget(self.selected_files_count)
-        file_count_layout.addStretch()
         
         info_layout.addWidget(file_count_group)
         
-        # 총 토큰 수
+        # Total token count
         token_count_group = QWidget()
         token_count_layout = QHBoxLayout(token_count_group)
         token_count_layout.setContentsMargins(0, 4, 0, 4)
         
-        total_tokens_label = QLabel("총 토큰 수:")
+        total_tokens_label = QLabel("Total tokens:")
         total_tokens_label.setProperty("infoLabel", True)
+        total_tokens_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         token_count_layout.addWidget(total_tokens_label)
+        
+        token_count_layout.addStretch(1)  # 스트레치 추가하여 값을 오른쪽으로 정렬
         
         self.total_tokens_count = QLabel("0")
         self.total_tokens_count.setProperty("infoValue", True)
-        self.total_tokens_count.setObjectName("counterLabel")
+        self.total_tokens_count.setObjectName("total_tokens_count")  # ID 변경
+        self.total_tokens_count.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)  # 최소 크기로 변경
+        self.total_tokens_count.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # 텍스트 오른쪽 정렬
         token_count_layout.addWidget(self.total_tokens_count)
-        token_count_layout.addStretch()
         
         info_layout.addWidget(token_count_group)
         
-        # 현재 모델 정보
-        model_group = QWidget()
-        model_layout = QHBoxLayout(model_group)
-        model_layout.setContentsMargins(0, 4, 0, 4)
-        
-        model_label = QLabel("현재 모델:")
-        model_label.setProperty("infoLabel", True)
-        model_layout.addWidget(model_label)
-        
-        self.model_name = QLabel(self.tokenizer.model_name)
-        self.model_name.setProperty("infoValue", True)
-        model_layout.addWidget(self.model_name)
-        model_layout.addStretch()
-        
-        info_layout.addWidget(model_group)
-        
         right_panel_layout.addWidget(info_container)
         
-        # 작업 버튼 그룹
-        action_header = QLabel("작업")
+        # Action button group
+        action_header = QLabel("Actions")
         action_header.setObjectName("panelHeader")
         right_panel_layout.addWidget(action_header)
         
-        # 작업 버튼 컨테이너
+        # Action button container
         action_container = QWidget()
         action_layout = QVBoxLayout(action_container)
         action_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 클립보드에 복사 버튼
-        self.copy_button = QPushButton("클립보드에 복사")
+        # Copy to clipboard button
+        self.copy_button = QPushButton("Copy to Clipboard")
         self.copy_button.setObjectName("copyButton")
         self.copy_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        # 아이콘 위치 설정
+        self.copy_button.setIconSize(QSize(18, 18))  # 아이콘 크기 조정
+        self.copy_button.setLayoutDirection(Qt.LeftToRight)  # 아이콘을 텍스트 왼쪽에 배치
         self.copy_button.clicked.connect(self._copy_to_clipboard)
-        self.copy_button.setEnabled(False)  # 초기에는 비활성화
-        # 복사 버튼 크기 정책 설정 (수평 확장)
+        self.copy_button.setEnabled(False)  # Initially disabled
+        # Copy button size policy setup (horizontal expansion)
         self.copy_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.copy_button.setMinimumHeight(40)  # 버튼 높이 설정
+        self.copy_button.setMinimumHeight(40)  # Button height setup
         action_layout.addWidget(self.copy_button)
         
-        # 설정 열기 버튼
-        self.settings_button = QPushButton("설정")
-        self.settings_button.setProperty("secondary", True)
-        self.settings_button.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        self.settings_button.clicked.connect(self._show_settings_dialog)
-        action_layout.addWidget(self.settings_button)
+        # Clear selection button
+        self.clear_button = QPushButton("Clear Selection")
+        self.clear_button.setObjectName("clearButton")
+        self.clear_button.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
+        self.clear_button.setIconSize(QSize(18, 18))
+        self.clear_button.setLayoutDirection(Qt.LeftToRight)
+        self.clear_button.clicked.connect(self._clear_selection)
+        self.clear_button.setEnabled(False)  # Initially disabled
+        self.clear_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.clear_button.setMinimumHeight(40)
+        action_layout.addWidget(self.clear_button)
         
         right_panel_layout.addWidget(action_container)
         
-        # 여백 추가 (하단 여백)
+        # Add margin (bottom margin)
         right_panel_layout.addStretch()
         
-        # 패널을 스플리터에 추가
+        # Add panels to splitter
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)
         
-        # 창 최소 크기 설정 (더 여유 있게)
+        # Set window minimum size (more spacious)
         self.setMinimumSize(900, 650)
         
-        # 스플리터 초기 크기 비율 설정 (좌:우 = 7:3)
+        # Set splitter initial size ratio (left:right = 7:3)
         splitter.setSizes([700, 300])
         
-        # 스플리터 크기 정책 설정
+        # Splitter size policy setup
         splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        # 메인 레이아웃에 스플리터 추가
+        # Add splitter to main layout
         main_layout.addWidget(splitter)
         
-        # 상태 표시줄 생성
+        # Create status bar
         status_bar = QStatusBar()
         self.setStatusBar(status_bar)
         
-        # 상태 메시지 레이블
-        self.status_label = QLabel("준비")
+        # Status message label
+        self.status_label = QLabel("Ready")
         status_bar.addWidget(self.status_label, 1)
         
-        # 프로그레스 바 추가
+        # Add progress bar
         self.progress_bar.setMaximumWidth(150)
         self.progress_bar.setVisible(False)
         status_bar.addPermanentWidget(self.progress_bar)
         
-        # 메뉴바 생성
+        # Create menu bar
         self._create_menu()
         
         # 윈도우 크기 및 제목 설정
-        self.setWindowTitle("LLM 프롬프트 헬퍼")
+        self.setWindowTitle("LLM Prompt Helper")
         self.resize(1200, 800)  # 초기 윈도우 크기 (좀 더 넓게)
         
         # 윈도우 아이콘 설정
@@ -921,50 +875,42 @@ class MainWindow(QMainWindow):
         # 부분 체크 상태는 _on_item_changed 및 _update_parent_checked_state 메소드에서 수동으로 처리
     
     def _create_menu(self):
-        """메뉴 바 생성"""
+        """Create menu bar"""
         menubar = QMenuBar()
         self.setMenuBar(menubar)
         
-        # 파일 메뉴
-        file_menu = QMenu("파일", self)
+        # File menu
+        file_menu = QMenu("File", self)
         menubar.addMenu(file_menu)
         
-        # 폴더 열기 액션
-        open_folder_action = QAction("폴더 열기", self)
+        # Open folder action
+        open_folder_action = QAction("Open Folder", self)
         open_folder_action.setShortcut("Ctrl+O")
         open_folder_action.triggered.connect(self._open_folder_dialog)
         file_menu.addAction(open_folder_action)
         
         file_menu.addSeparator()
         
-        # 설정 액션
-        settings_action = QAction("설정", self)
-        settings_action.setShortcut("Ctrl+,")
-        settings_action.triggered.connect(self._show_settings_dialog)
-        file_menu.addAction(settings_action)
-        
-        file_menu.addSeparator()
-        
-        # 종료 액션
-        exit_action = QAction("종료", self)
+        # Exit action
+        exit_action = QAction("Exit", self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
-        # 도움말 메뉴
-        help_menu = QMenu("도움말", self)
+        # Help menu
+        help_menu = QMenu("Help", self)
         menubar.addMenu(help_menu)
         
-        # 정보 액션
-        about_action = QAction("정보", self)
+        # About action
+        about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about_dialog)
         help_menu.addAction(about_action)
     
     def _open_folder_dialog(self):
-        """폴더 선택 다이얼로그 표시"""
+        """Display folder selection dialog"""
         folder_path = QFileDialog.getExistingDirectory(
             self,
-            "폴더 선택",
+            "Select Folder",
             str(Path.home()),
             QFileDialog.ShowDirsOnly
         )
@@ -974,20 +920,20 @@ class MainWindow(QMainWindow):
     
     def _load_folder(self, folder_path: str):
         """
-        지정된 폴더 경로를 로드하여 트리 뷰에 표시
+        Load the specified folder path and display in tree view
         
         Args:
-            folder_path: 로드할 폴더 경로
+            folder_path: Folder path to load
         """
         try:
             self.current_folder = Path(folder_path)
             
-            # 기존 토큰화 스레드가 있으면 중지
+            # Stop existing tokenizer thread if running
             if self.token_thread and self.token_thread.isRunning():
                 self.token_thread.stop()
                 self.token_thread.wait()
             
-            # 상태 초기화
+            # Reset state
             self.checked_items.clear()
             self.checked_files = 0
             self.checked_dirs = 0
@@ -995,41 +941,37 @@ class MainWindow(QMainWindow):
             self.token_cache.clear()
             self.file_cache.clear()
             
-            # UI 업데이트
+            # Update UI
             self.folder_path.setText(folder_path)
-            self.selected_files_count.setText("0개")
+            self.selected_files_count.setText("0")
             self.total_tokens_count.setText("0")
             self.copy_button.setEnabled(False)
             
-            # .gitignore 필터 초기화
-            apply_gitignore = self.apply_gitignore_cb.isChecked()
-            if apply_gitignore:
-                self.gitignore_filter = GitignoreFilter(folder_path)
-                if self.gitignore_filter.has_gitignore():
-                    self.statusBar().showMessage(f".gitignore 규칙을 적용합니다: {self.gitignore_filter.get_gitignore_path()}", 5000)
-                else:
-                    self.statusBar().showMessage(".gitignore 파일이 없습니다. 필터링 없이 모든 파일이 표시됩니다.", 5000)
-                    self.gitignore_filter = None
+            # Initialize .gitignore filter
+            self.gitignore_filter = GitignoreFilter(folder_path)
+            if self.gitignore_filter.has_gitignore():
+                self.statusBar().showMessage(f"Applying .gitignore rules: {self.gitignore_filter.get_gitignore_path()}", 5000)
             else:
+                self.statusBar().showMessage("No .gitignore file found. All files will be displayed.", 5000)
                 self.gitignore_filter = None
                 
-            # 파일 및 폴더 스캔
-            include_hidden = self.show_hidden_files_cb.isChecked()
+            # Scan files and folders
+            include_hidden = False  # Always hide hidden files
             items = scan_directory(folder_path, follow_symlinks=False, include_hidden=include_hidden)
             
-            # .gitignore 필터링 적용
-            if self.gitignore_filter and apply_gitignore:
+            # Apply .gitignore filtering
+            if self.gitignore_filter:
                 filtered_items = []
                 ignored_count = 0
                 
                 for item in items:
                     path = item['path']
-                    # 루트 디렉토리 자체는 항상 포함
+                    # Always include the root directory itself
                     if path == self.current_folder:
                         filtered_items.append(item)
                         continue
                         
-                    # .gitignore 규칙 적용
+                    # Apply .gitignore rules
                     if self.gitignore_filter.should_ignore(path):
                         ignored_count += 1
                         continue
@@ -1039,9 +981,9 @@ class MainWindow(QMainWindow):
                 items = filtered_items
                 
                 if ignored_count > 0:
-                    self.statusBar().showMessage(f"{ignored_count}개 항목이 .gitignore 규칙으로 필터링되었습니다.", 5000)
+                    self.statusBar().showMessage(f"{ignored_count} items filtered by .gitignore rules.", 5000)
             
-            # venv 폴더 필터링 추가
+            # Filter venv folders
             venv_count = 0
             filtered_items = []
             
@@ -1050,12 +992,12 @@ class MainWindow(QMainWindow):
                 rel_path = item.get('rel_path', '')
                 parts = Path(rel_path).parts
                 
-                # 루트 디렉토리 자체는 항상 포함
+                # Always include the root directory itself
                 if path == self.current_folder:
                     filtered_items.append(item)
                     continue
                 
-                # venv, virtualenv, env 등의 가상환경 폴더 제외
+                # Exclude venv, virtualenv, env, etc. virtual environment folders
                 is_venv = False
                 for part in parts:
                     if part in ['venv', 'virtualenv', 'env', '.venv'] or part.startswith('venv-'):
@@ -1069,42 +1011,42 @@ class MainWindow(QMainWindow):
             items = filtered_items
             
             if venv_count > 0:
-                self.statusBar().showMessage(f"{venv_count}개 가상환경 폴더가 필터링되었습니다.", 5000)
+                self.statusBar().showMessage(f"{venv_count} virtual environment folders filtered.", 5000)
             
-            # 정렬 적용 - 전체 항목 목록을 먼저 정렬
+            # Apply sorting - sort the entire list of items first
             items = sort_items(items)
-            logger.info(f"정렬 완료: 폴더 우선, 이름순으로 {len(items)}개 항목 정렬됨")
+            logger.info(f"Sorting completed: {len(items)} items sorted by folders first, then by name")
             
-            # 트리 뷰 모델 초기화 및 채우기
+            # Initialize tree view model and populate
             self.tree_model.clear()
-            self.tree_model.setHorizontalHeaderLabels(['파일/폴더'])
+            self.tree_model.setHorizontalHeaderLabels(['Files/Folders'])
             
-            # 트리 뷰에 항목 추가
+            # Add items to tree view
             self._populate_tree_view(items)
             
-            # 모든 파일 경로를 리스트로 수집
+            # Collect all file paths as a list
             text_files = []
             for item in items:
                 path = item.get('path')
                 is_dir = item.get('is_dir')
                 error = item.get('error')
                 
-                # 디렉토리나 오류가 있는 항목은 제외
+                # Exclude directories or items with errors
                 if is_dir or error:
                     continue
                 
-                # 텍스트 파일만 추가
+                # Add only text files
                 if not is_binary_file(path):
                     text_files.append(path)
             
-            # 백그라운드에서 토큰 계산 시작
+            # Start token calculation in background
             self._start_token_calculation(text_files)
             
-            logger.info(f"폴더 로드 완료: {folder_path}")
+            logger.info(f"Folder loaded: {folder_path}")
             
         except Exception as e:
-            logger.error(f"폴더 로드 중 오류: {e}")
-            self.statusBar().showMessage(f"오류: {str(e)}", 5000)
+            logger.error(f"Error loading folder: {e}")
+            self.statusBar().showMessage(f"Error: {str(e)}", 5000)
     
     def _populate_tree_view(self, items: List[Dict[str, Any]]):
         """
@@ -1519,7 +1461,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(True)
         
         # 상태 메시지 업데이트
-        self.statusBar().showMessage(f"토큰 계산 중... (0/{len(files)} 파일)")
+        self.statusBar().showMessage(f"Calculating tokens: 0/{len(files)} files", 0)
         
         # 토큰화 스레드 생성 및 시작
         self.token_thread = TokenizerThread(files, self.tokenizer)
@@ -1534,277 +1476,153 @@ class MainWindow(QMainWindow):
         self.token_thread.start()
     
     def _on_token_progress(self, current: int, total: int):
-        """
-        토큰 계산 진행 상황 업데이트
-        
-        Args:
-            current: 현재 처리 중인 파일 인덱스
-            total: 총 파일 수
-        """
+        """Update progress bar when token calculation progresses"""
+        self.progress_bar.setRange(0, total)
         self.progress_bar.setValue(current)
-        self.statusBar().showMessage(f"토큰 계산 중... ({current}/{total} 파일)")
+        self.progress_bar.setVisible(True)
+        
+        # Update status message
+        self.statusBar().showMessage(f"Calculating tokens: {current}/{total}", 0)
     
     def _on_token_calculated(self, file_path: str, token_count: int):
-        """
-        파일의 토큰 계산 결과 처리
-        
-        Args:
-            file_path: 파일 경로
-            token_count: 계산된 토큰 수
-        """
-        # 토큰 캐시 업데이트
+        """Callback when token count is calculated for a file"""
+        # Add to token cache
         self.token_cache[file_path] = token_count
         
-        # 현재 체크된 항목이면 총 토큰 수에 추가
-        if file_path in self.checked_items:
-            self.total_tokens += token_count
-            self.total_tokens_count.setText(f"{self.total_tokens:,}")
+        # Update progress bar value for each file
+        current = self.progress_bar.value() + 1
+        total = self.progress_bar.maximum()
+        self.progress_bar.setValue(current)
+        
+        # Update status message
+        self.statusBar().showMessage(f"Calculating tokens: {current}/{total}", 0)
     
     def _on_token_calculation_finished(self):
-        """토큰 계산 완료 시 호출"""
-        # 프로그레스 바 숨기기
+        """Callback when token calculation is complete"""
+        # Hide progress bar
         self.progress_bar.setVisible(False)
         
-        # 상태 메시지 업데이트
-        total_files = len(self.token_cache)
-        self.statusBar().showMessage(f"토큰 계산 완료 ({total_files} 파일)", 5000)
+        # Update status message
+        self.statusBar().showMessage("Token calculation complete", 5000)
         
-        # 토큰 수 업데이트
+        # Update token count display
         self._update_token_count()
     
     def _on_token_calculation_error(self, error_msg: str):
-        """
-        토큰 계산 중 오류 발생 시 호출
-        
-        Args:
-            error_msg: 오류 메시지
-        """
-        # 프로그레스 바 숨기기
+        """Handle token calculation errors"""
+        # Hide progress bar
         self.progress_bar.setVisible(False)
         
-        # 오류 메시지 표시
-        self.statusBar().showMessage(f"토큰 계산 중 오류: {error_msg}", 10000)
+        # Update status message
+        self.statusBar().showMessage(f"Token calculation error: {error_msg}", 5000)
+        logger.error(f"Token calculation error: {error_msg}")
     
     def _update_token_count(self):
-        """
-        선택된 항목의 총 토큰 수 계산 및 UI 업데이트
-        checked_items 세트를 기반으로 계산
-        """
-        # 토큰 캐시가 비어있으면 계산 불필요
-        if not self.token_cache:
-            return
-        
-        # 총 토큰 수 다시 계산
+        """Update the total token count based on checked files"""
+        old_total = self.total_tokens
         self.total_tokens = 0
         
-        # 체크된 파일만 계산 (디렉토리 제외)
-        checked_files = [path for path in self.checked_items 
-                        if not Path(path).is_dir() and path in self.token_cache]
+        # Sum up tokens for all checked files
+        for path_str in self.checked_items:
+            path = Path(path_str)
+            # Skip directories
+            if path.is_dir():
+                continue
+                
+            # Get token count from cache if available
+            if str(path) in self.token_cache:
+                self.total_tokens += self.token_cache[str(path)]
         
-        for file_path in checked_files:
-            self.total_tokens += self.token_cache.get(file_path, 0)
-        
-        # UI 업데이트
+        # Update UI
         self.total_tokens_count.setText(f"{self.total_tokens:,}")
+        
+        # Log if changed
+        if old_total != self.total_tokens:
+            logger.info(f"Total token count updated: {self.total_tokens}")
+            
+        return self.total_tokens
     
     def _show_about_dialog(self):
-        """정보 대화상자 표시"""
+        """Show the about dialog"""
+        about_text = f"""
+        <h2>LLM Prompt Helper</h2>
+        <p>Version 1.0.0</p>
+        <p>A tool to help prepare code snippets for LLM prompts.</p>
+        <p>©2023</p>
+        <p>Using tokenizer: {self.tokenizer.model_name}</p>
+        """
+        
+        QMessageBox.about(self, "About", about_text)
+    
+    def _copy_to_clipboard(self):
+        """Copy selected files to clipboard in formatted output"""
         try:
-            msg_box = QMessageBox(self)
-            msg_box.setObjectName("information")
-            msg_box.setWindowTitle("프로그램 정보")
-            msg_box.setText(
-                "LLM 프롬프트 헬퍼 v1.0\n\n"
-                "이 프로그램은 LLM(대규모 언어 모델)에 코드베이스 정보를 "
-                "프롬프트로 전달할 때 유용한 형식으로 변환해주는 도구입니다.\n\n"
-                "© 2023 LLM 프롬프트 헬퍼 프로젝트"
+            # Get all checked files
+            files = []
+            for path_str in sorted(self.checked_items):
+                path = Path(path_str)
+                # Only include files, not directories
+                if not path.is_dir():
+                    files.append(path)
+            
+            if not files:
+                self.statusBar().showMessage("No files selected to copy", 5000)
+                return
+            
+            total_files = len(files)
+            self.statusBar().showMessage(f"Preparing {total_files} files for clipboard...", 0)
+            
+            # Update progress bar
+            self.progress_bar.setRange(0, total_files)
+            self.progress_bar.setValue(0)
+            self.progress_bar.setVisible(True)
+            
+            # Reset token count if needed
+            if self.total_tokens <= 0:
+                self._update_token_count()
+            
+            # Generate formatted output
+            output = generate_full_output(
+                self.current_folder, 
+                [str(f) for f in files],
+                self.file_cache
             )
-            msg_box.setStandardButtons(QMessageBox.Ok)
-            msg_box.exec()
+            
+            # Copy to clipboard
+            if copy_to_clipboard(output):
+                # Success message
+                self.statusBar().showMessage(
+                    f"Copied {total_files} files ({self.total_tokens} tokens) to clipboard", 
+                    5000
+                )
+                logger.info(f"Copied {total_files} files ({self.total_tokens} tokens) to clipboard")
+            else:
+                # Failed message
+                self.statusBar().showMessage("Clipboard copy failed", 5000)
+                logger.error("Clipboard copy failed")
+                
         except Exception as e:
-            logger.error(f"정보 대화상자 표시 중 오류: {str(e)}")
+            logger.error(f"Error copying to clipboard: {e}", exc_info=True)
+            self.statusBar().showMessage(f"Error occurred during copy: {str(e)}", 5000)
+            # Show error message box
+            error_box = QMessageBox(self)
+            error_box.setObjectName("critical")
+            error_box.setWindowTitle("Copy Error")
+            error_box.setText(f"An error occurred while copying to clipboard.\n\n{str(e)}")
+            error_box.setIcon(QMessageBox.Critical)
+            error_box.exec()
     
     def _toggle_hidden_files(self):
-        """숨김 파일/폴더 표시 토글"""
+        """Toggle display of hidden files/folders"""
+        self.show_hidden = not self.show_hidden
         if self.current_folder:
             self._load_folder(str(self.current_folder))
     
     def _toggle_gitignore_filter(self):
-        """.gitignore 필터 적용 토글"""
+        """Toggle application of .gitignore filter"""
         if self.current_folder:
             self._load_folder(str(self.current_folder))
     
-    def _copy_to_clipboard(self):
-        """
-        선택된 파일 및 폴더 정보를 <file_map>과 <file_contents> 형식으로 클립보드에 복사
-        """
-        if not self.current_folder or self.checked_files == 0:
-            self.statusBar().showMessage("선택된 파일이 없습니다.", 3000)
-            return
-        
-        try:
-            # 체크된 항목 정보 수집
-            checked_items = []
-            processed_count = 0
-            
-            # 디버깅 로깅 추가
-            logger.debug(f"클립보드 복사 시작: {len(self.checked_items)}개 항목")
-            
-            for path_str in self.checked_items:
-                try:
-                    # 경로 객체로 변환
-                    path = Path(path_str)
-                    
-                    # 절대 경로 확인
-                    if not path.is_absolute():
-                        abs_path = self.current_folder / path
-                    else:
-                        abs_path = path
-                    
-                    # 경로가 존재하는지 확인
-                    if not abs_path.exists():
-                        logger.warning(f"경로가 존재하지 않습니다: {abs_path}")
-                        continue
-                    
-                    # 디렉토리 여부 확인 (파일 시스템에서 직접 확인)
-                    is_dir = abs_path.is_dir()
-                    
-                    # 상대 경로 계산 (현재 폴더 기준)
-                    try:
-                        rel_path = abs_path.relative_to(self.current_folder)
-                    except ValueError:
-                        # 상대 경로를 계산할 수 없는 경우 파일 이름만 사용
-                        rel_path = Path(abs_path.name)
-                        logger.warning(f"상대 경로를 계산할 수 없습니다: {abs_path}, 파일 이름만 사용: {rel_path}")
-                    
-                    # 파일인 경우 바이너리 여부 추가 검사
-                    if not is_dir:
-                        # 해당 경로의 트리 아이템 찾기
-                        item = self._find_item_by_path(abs_path)
-                        
-                        # 아이템이 없는 경우 건너뜀
-                        if item is None:
-                            logger.warning(f"트리 아이템을 찾을 수 없습니다: {abs_path}")
-                            continue
-                        
-                        # 바이너리 파일은 제외
-                        if item.data(Qt.UserRole + 1):
-                            logger.info(f"바이너리 파일 제외: {abs_path}")
-                            continue
-                    
-                    # 상세 디버깅 로깅
-                    logger.debug(f"항목 추가: {rel_path}, is_dir={is_dir}")
-                    
-                    # 아이템 정보 추가
-                    checked_items.append({
-                        'path': abs_path,
-                        'rel_path': rel_path,
-                        'is_dir': is_dir
-                    })
-                    processed_count += 1
-                    
-                except Exception as e:
-                    logger.warning(f"항목 정보 수집 중 오류 (건너뜀): {e}", exc_info=True)
-                    continue
-            
-            if not checked_items:
-                self.statusBar().showMessage("복사할 유효한 항목이 없습니다.", 3000)
-                return
-            
-            logger.info(f"복사할 항목 수집 완료: {len(checked_items)}개 항목")
-            
-            # 항목 검증
-            for item in checked_items:
-                if not isinstance(item.get('rel_path'), Path):
-                    logger.warning(f"rel_path가 Path 객체가 아닙니다: {item}")
-                    item['rel_path'] = Path(str(item['rel_path']))
-                    
-                if 'is_dir' not in item:
-                    logger.warning(f"is_dir이 없는 항목: {item}")
-                    item['is_dir'] = item['path'].is_dir() if 'path' in item else False
-            
-            # <file_map>과 <file_contents> 생성
-            try:
-                result = generate_full_output(checked_items, self.current_folder)
-            except Exception as e:
-                logger.error(f"출력 생성 중 오류: {e}", exc_info=True)
-                self.statusBar().showMessage("출력 형식 생성 실패", 5000)
-                error_box = QMessageBox(self)
-                error_box.setObjectName("critical")
-                error_box.setWindowTitle("출력 형식 오류")
-                error_box.setText(f"파일 구조를 형식화하는 중 오류가 발생했습니다.\n\n{str(e)}")
-                error_box.setIcon(QMessageBox.Critical)
-                error_box.exec()
-                return
-            
-            # 클립보드에 복사
-            if copy_to_clipboard(result):
-                # 성공 메시지 표시 (선택 파일 수와 토큰 수 포함)
-                self.statusBar().showMessage(
-                    f"{self.checked_files}개 파일 ({self.total_tokens} 토큰) 클립보드에 복사됨", 
-                    5000
-                )
-                logger.info(f"클립보드 복사 성공: {self.checked_files}개 파일, {self.total_tokens} 토큰")
-            else:
-                # 실패 메시지 표시
-                self.statusBar().showMessage("클립보드 복사 실패", 5000)
-                logger.error("클립보드 복사 실패")
-                
-        except Exception as e:
-            logger.error(f"클립보드 복사 중 오류: {e}", exc_info=True)
-            self.statusBar().showMessage(f"복사 중 오류 발생: {str(e)}", 5000)
-            # 오류 메시지 박스 표시
-            error_box = QMessageBox(self)
-            error_box.setObjectName("critical")
-            error_box.setWindowTitle("복사 오류")
-            error_box.setText(f"클립보드에 복사하는 중 오류가 발생했습니다.\n\n{str(e)}")
-            error_box.setIcon(QMessageBox.Critical)
-            error_box.exec()
-    
-    def _show_settings_dialog(self):
-        """설정 대화상자 표시"""
-        try:
-            dialog = SettingsDialog(
-                self.tokenizer.get_available_models(),
-                self.tokenizer.model_name,
-                self
-            )
-            
-            if dialog.exec() == QDialog.Accepted:
-                try:
-                    new_model = dialog.get_selected_model()
-                    self.tokenizer.set_model(new_model)
-                    self._update_token_count()
-                    self.statusBar().showMessage(f"토큰화 모델 변경됨: {new_model}", 5000)
-                except Exception as e:
-                    logger.error(f"설정 적용 중 오류: {str(e)}")
-                    error_box = QMessageBox(self)
-                    error_box.setObjectName("critical")
-                    error_box.setWindowTitle("오류")
-                    error_box.setText(f"설정을 적용하는 중 오류가 발생했습니다:\n{str(e)}")
-                    error_box.setIcon(QMessageBox.Critical)
-                    error_box.exec()
-        except Exception as e:
-            logger.error(f"설정 대화상자 표시 중 오류: {str(e)}")
-            error_box = QMessageBox(self)
-            error_box.setObjectName("critical")
-            error_box.setWindowTitle("오류")
-            error_box.setText(f"설정 다이얼로그를 표시하는 중 오류가 발생했습니다:\n{str(e)}")
-            error_box.setIcon(QMessageBox.Critical)
-            error_box.exec()
-    
-    def _on_item_expanded(self, index):
-        """트리 항목이 확장되었을 때 호출됨"""
-        item = self.tree_model.itemFromIndex(index)
-        if item and item.data(Qt.UserRole) is True:  # 디렉토리인 경우만
-            item.setIcon(self.folder_open_icon)
-    
-    def _on_item_collapsed(self, index):
-        """트리 항목이 축소되었을 때 호출됨"""
-        item = self.tree_model.itemFromIndex(index)
-        if item and item.data(Qt.UserRole) is True:  # 디렉토리인 경우만
-            item.setIcon(self.folder_icon)
-
     def _center_window(self):
         """윈도우를 화면 중앙에 배치"""
         screen = QApplication.primaryScreen()
@@ -1815,42 +1633,21 @@ class MainWindow(QMainWindow):
         self.move(x, y)
 
     def closeEvent(self, event):
-        """프로그램 종료 시 처리"""
-        # 토큰화 스레드 종료
+        """Handle program exit"""
+        # Terminate tokenizer thread
         if self.token_thread and self.token_thread.isRunning():
             self.token_thread.stop()
             self.token_thread.wait()
         
-        # 현재 설정 저장
-        try:
-            # 현재 설정 수집
-            settings = {
-                "model_name": self.tokenizer.model_name,
-                "show_hidden_files": self.show_hidden_files_cb.isChecked(),
-                "apply_gitignore": self.apply_gitignore_cb.isChecked(),
-                "follow_symlinks": False
-            }
-            
-            # 마지막으로 열었던 폴더 저장
-            if self.current_folder:
-                settings["last_directory"] = str(self.current_folder)
-            
-            # 설정 저장
-            self.settings_manager.update_settings(settings)
-            self.settings_manager.save_settings()
-            logger.info("애플리케이션 종료 시 설정 저장됨")
-        except Exception as e:
-            logger.error(f"설정 저장 중 오류: {e}")
-            
         event.accept()
         
     def _handle_copy_error(self, error_text: str):
-        """복사 오류 처리"""
-        logger.error(f"복사 오류: {error_text}")
+        """Handle copy error"""
+        logger.error(f"Copy error: {error_text}")
         msg_box = QMessageBox(self)
         msg_box.setObjectName("critical")
-        msg_box.setWindowTitle("오류")
-        msg_box.setText(f"클립보드에 복사하는 중 오류가 발생했습니다:\n{error_text}")
+        msg_box.setWindowTitle("Error")
+        msg_box.setText(f"An error occurred while copying to clipboard:\n{error_text}")
         msg_box.setIcon(QMessageBox.Critical)
         msg_box.exec()
 
@@ -1899,38 +1696,39 @@ class MainWindow(QMainWindow):
                 self.checked_files += 1
         
         # UI 업데이트
-        self.selected_files_count.setText(f"{self.checked_files}개")
+        self.selected_files_count.setText(f"{self.checked_files}")
         self.copy_button.setEnabled(self.checked_files > 0)
+        self.clear_button.setEnabled(len(self.checked_items) > 0)
     
     def _find_item_by_path(self, path: Path) -> Optional[QStandardItem]:
         """
-        경로에 해당하는 트리 아이템을 찾아 반환
+        Find tree item corresponding to a path
         
         Args:
-            path: 찾을 파일/폴더 경로
+            path: File/folder path to find
             
         Returns:
-            찾은 QStandardItem 또는 None
+            Found QStandardItem or None
         """
         if not self.current_folder:
             return None
             
-        # 상대 경로 계산
+        # Calculate relative path
         try:
             rel_path = path.relative_to(self.current_folder)
         except ValueError:
             return None
             
-        # 루트부터 시작하여 경로 따라가기
-        parent_item = self.tree_model.item(0)  # 루트 아이템
+        # Start from root and follow path
+        parent_item = self.tree_model.item(0)  # Root item
         if not parent_item:
             return None
             
-        # 경로 파트가 없으면 루트 아이템 자체 반환
+        # Return root item if no path parts
         if len(rel_path.parts) == 0:
             return parent_item
             
-        # 각 경로 파트에 대해 자식 아이템 찾기
+        # Find child item for each path part
         for part in rel_path.parts:
             found = False
             for row in range(parent_item.rowCount()):
@@ -1944,4 +1742,61 @@ class MainWindow(QMainWindow):
                 return None
                 
         return parent_item
+    
+    def _on_item_expanded(self, index):
+        """Called when a tree item is expanded"""
+        item = self.tree_model.itemFromIndex(index)
+        if item and item.data(Qt.UserRole) is True:  # For directories only
+            item.setIcon(self.folder_open_icon)
+    
+    def _on_item_collapsed(self, index):
+        """Called when a tree item is collapsed"""
+        item = self.tree_model.itemFromIndex(index)
+        if item and item.data(Qt.UserRole) is True:  # For directories only
+            item.setIcon(self.folder_icon)
+    
+    def _clear_selection(self):
+        """Clear all checked items in the tree view"""
+        if not self.tree_model:
+            return
+            
+        # Temporarily disconnect the itemChanged signal to avoid recursion
+        self.tree_model.itemChanged.disconnect(self._on_item_changed)
+        
+        # Clear root item and all children
+        root_item = self.tree_model.item(0)
+        if root_item:
+            self._uncheck_item_recursive(root_item)
+            
+        # Clear checked items set
+        self.checked_items.clear()
+        self.checked_files = 0
+        self.checked_dirs = 0
+        
+        # Update UI
+        self.selected_files_count.setText("0")
+        self.total_tokens_count.setText("0")
+        self.total_tokens = 0
+        
+        # Disable buttons
+        self.copy_button.setEnabled(False)
+        self.clear_button.setEnabled(False)
+        
+        # Reconnect the itemChanged signal
+        self.tree_model.itemChanged.connect(self._on_item_changed)
+        
+        # Log
+        logger.info("Selection cleared")
+        self.statusBar().showMessage("Selection cleared", 3000)
+    
+    def _uncheck_item_recursive(self, item):
+        """Recursively uncheck an item and all its children"""
+        if item.isCheckable():
+            item.setCheckState(Qt.Unchecked)
+            
+        # Process children
+        for row in range(item.rowCount()):
+            child = item.child(row)
+            if child:
+                self._uncheck_item_recursive(child)
     

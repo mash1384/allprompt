@@ -266,25 +266,100 @@ def generate_file_contents(
     
     contents.append("</file_contents>")
     
-    return "\n".join(contents)
+    return f"{file_map}\n\n{'\n'.join(contents)}"
 
 def generate_full_output(
-    items: List[Dict[str, Any]], 
-    root_path: Union[str, Path],
+    root_path: Union[str, Path], 
+    file_paths: List[str],
+    file_cache: Dict[str, str] = None,
     indent_size: int = 2
 ) -> str:
     """
-    <file_map>과 <file_contents>를 모두 포함한 전체 출력 생성
+    Generate complete output including both <file_map> and <file_contents>
     
     Args:
-        items: 파일 및 폴더 정보 목록 (체크된 항목만)
-        root_path: 루트 디렉토리 경로
-        indent_size: 들여쓰기 공백 수 (기본값: 2)
+        root_path: Root directory path
+        file_paths: List of file paths to include
+        file_cache: Cache of file contents {file_path: content}
+        indent_size: Number of spaces for indentation (default: 2)
         
     Returns:
-        <file_map>과 <file_contents>를 순서대로 포함한 문자열
+        String containing <file_map> and <file_contents> in sequence
     """
-    file_map = generate_file_map(items, root_path, indent_size)
-    file_contents = generate_file_contents(items, root_path)
+    # Convert paths to item dictionaries for compatibility with existing functions
+    root_path = Path(root_path)
+    items = []
     
-    return f"{file_map}\n\n{file_contents}" 
+    for path_str in file_paths:
+        path = Path(path_str)
+        # Calculate relative path from root
+        try:
+            rel_path = path.relative_to(root_path)
+        except ValueError:
+            # If not relative to root, use filename only
+            rel_path = Path(path.name)
+            
+        items.append({
+            'path': path,
+            'rel_path': rel_path,
+            'is_dir': path.is_dir()
+        })
+    
+    # Generate file map
+    file_map = generate_file_map(items, root_path, indent_size)
+    
+    # Generate file contents with file cache if provided
+    contents = ["<file_contents>"]
+    
+    # Sort files by path
+    sorted_items = sorted(
+        [item for item in items if not item.get('is_dir', True)], 
+        key=lambda x: str(x.get('rel_path', ''))
+    )
+    
+    for item in sorted_items:
+        if 'path' not in item or item.get('is_dir', True):
+            continue
+            
+        file_path = item['path']
+        rel_path = item.get('rel_path', file_path.name)
+        
+        # Convert relative path to string (OS-independent representation)
+        rel_path_str = str(rel_path).replace(os.sep, '/')
+        
+        # Determine language identifier based on file extension
+        file_ext = file_path.suffix.lower()
+        language = EXTENSION_TO_LANGUAGE.get(file_ext, "text")
+        
+        # Get file content from cache if available, otherwise read from file
+        if file_cache and str(file_path) in file_cache:
+            content = file_cache[str(file_path)]
+        else:
+            # Read file content
+            result = read_text_file(file_path)
+            
+            # Handle different return formats (string or dictionary)
+            if isinstance(result, dict) and 'error' in result:
+                # Dictionary with error information
+                error_type = result.get('error_type', 'UnknownError')
+                details = result.get('details', 'Unable to read file.')
+                logger.warning(f"File reading error ({error_type}): {file_path} - {details}")
+                content = f"// Error: {error_type} - {details}"
+            elif result is None:
+                # None case (for backward compatibility)
+                logger.warning(f"Unable to read file content: {file_path}")
+                content = "// File could not be read."
+            else:
+                # Successfully read string
+                content = result
+        
+        # Format file content and add to output
+        contents.append(f"File: {rel_path_str}")
+        contents.append(f"```{language}")
+        contents.append(content)
+        contents.append("```")
+        contents.append("")  # Add empty line between files
+    
+    contents.append("</file_contents>")
+    
+    return f"{file_map}\n\n{'\n'.join(contents)}" 
