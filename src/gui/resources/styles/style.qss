@@ -279,15 +279,15 @@ QTreeView::item {
     background-color: transparent !important;
 }
 
-QTreeView::item:hover, QTreeView::item:!hover {
+QTreeView::item:hover {
     background-color: transparent !important;
-    border: none !important;
+    border: 1px solid #5A6374 !important; /* 연한 회색 테두리 */
 }
 
-QTreeView::item:selected, QTreeView::item:selected:!active {
+QTreeView::item:selected, QTreeView::item:selected:active {
     background-color: transparent !important;
     color: #DCE0E8;
-    border: none !important;
+    border: 1px solid #528BFF !important;
 }
 
 QTreeView::branch {
@@ -316,7 +316,7 @@ QTreeView::indicator {
 
 QTreeView::indicator:hover {
     background-color: #1A1D23;
-    border: 1px solid #5A6374;
+    border: 1px solid #61AFEF;
 }
 
 QTreeView::indicator:checked {
@@ -326,8 +326,19 @@ QTreeView::indicator:checked {
 }
 
 QTreeView::indicator:checked:hover {
-    background-color: #528BFF;
-    border: 1px solid #528BFF;
+    background-color: #61AFEF;
+    border: 1px solid #61AFEF;
+}
+
+QTreeView::indicator:indeterminate {
+    background-color: #4A5E80;
+    border: 1px solid #61AFEF;
+    image: url(:/icons/dash.svg);
+}
+
+QTreeView::indicator:indeterminate:hover {
+    background-color: #5A6E90;
+    border: 1px solid #61AFEF;
 }
 
 QHeaderView::section {

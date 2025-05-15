@@ -7,7 +7,15 @@ LLM 프롬프트용 코드 스니펫 생성 도우미
 """
 
 import sys
+import os
 import logging
+from pathlib import Path
+
+# 프로젝트 루트 디렉토리를 sys.path에 추가
+project_root = str(Path(__file__).parent.parent.absolute())
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QFile, QTextStream # QTextStream 임포트 추가
 from src.gui.main_window import MainWindow

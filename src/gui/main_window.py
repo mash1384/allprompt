@@ -21,10 +21,10 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QFileDialog, QTreeView, QStatusBar,
     QMessageBox, QProgressBar, QMenu, QMenuBar, QApplication,
     QStyle, QCheckBox, QSizePolicy, QDialog, QDialogButtonBox, QFormLayout,
-    QLineEdit, QComboBox, QStyledItemDelegate, QProxyStyle
+    QLineEdit, QComboBox, QStyledItemDelegate, QProxyStyle, QStyleOptionViewItem
 )
 from PySide6.QtCore import Qt, QSize, QDir, Signal, Slot, QThread, QSortFilterProxyModel, QModelIndex, QEvent, QObject
-from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon, QAction, QFont, QDesktopServices, QPainter
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon, QAction, QFont, QDesktopServices, QPainter, QCursor
 
 # 파일 스캐너 모듈 임포트
 from src.core.file_scanner import scan_directory, is_binary_file, read_text_file
@@ -125,72 +125,6 @@ FILE_EXTENSIONS_TO_LANGUAGE = {
     '.gitignore': 'gitignore',
 }
 
-class HoverEventFilter(QObject):
-    """
-    마우스 호버 이벤트를 처리하는 이벤트 필터
-    파일 및 폴더 항목에 호버 시 회색 테두리 효과를 활성화하기 위해 이벤트를 통과시킴
-    """
-    def eventFilter(self, watched, event):
-        # 모든 이벤트를 통과시켜 호버 효과가 활성화되도록 함
-        return super().eventFilter(watched, event)
-
-class NoHoverDelegate(QStyledItemDelegate):
-    """
-    호버 상태에서도 선택 효과만 유지하는 커스텀 항목 델리게이트
-    """
-    def paint(self, painter, option, index):
-        # 선택 상태와 포커스 상태 효과는 제거하지만 호버 효과는 유지
-        option_copy = option.__class__(option)
-        
-        # 선택 상태 플래그 제거
-        if option_copy.state & QStyle.State_Selected:
-            option_copy.state &= ~QStyle.State_Selected
-        
-        # 포커스 상태 플래그 제거
-        if option_copy.state & QStyle.State_HasFocus:
-            option_copy.state &= ~QStyle.State_HasFocus
-        
-        # 기본 스타일로 배경과 기본 내용 그리기 (호버 효과 유지)
-        super().paint(painter, option_copy, index)
-
-class NoHoverStyle(QProxyStyle):
-    """
-    호버 효과만 유지하고 다른 효과는 제거하는 프록시 스타일
-    """
-    def __init__(self, style=None):
-        super().__init__(style)
-        
-    def drawPrimitive(self, element, option, painter, widget=None):
-        """
-        기본 요소 그리기를 재정의하여 선택 및 포커스 효과 제거
-        """
-        # 항목 효과 제어 (PE_PanelItemViewItem은 항목의 배경을 그리는 요소)
-        if element == QStyle.PE_PanelItemViewItem:
-            # 선택 상태 제거
-            if option.state & QStyle.State_Selected:
-                option.state &= ~QStyle.State_Selected
-                
-            # 포커스 상태 제거
-            if option.state & QStyle.State_HasFocus:
-                option.state &= ~QStyle.State_HasFocus
-                
-            # 호버 상태는 유지 (제거하지 않음)
-            # 기본 그리기에 호버 상태를 전달
-        
-        # 상위 클래스의 그리기 메서드 호출
-        super().drawPrimitive(element, option, painter, widget)
-        
-    def styleHint(self, hint, option=None, widget=None, returnData=None):
-        """
-        스타일 힌트 재정의
-        """
-        # 특정 힌트 비활성화
-        if hint in [QStyle.SH_ItemView_ShowDecorationSelected]:
-            return 0
-        
-        # 그 외 힌트는 기본 처리
-        return super().styleHint(hint, option, widget, returnData)
-
 class TokenizerThread(QThread):
     """
     백그라운드 토큰 계산 스레드
@@ -271,7 +205,7 @@ class MainWindow(QMainWindow):
         self.settings_manager = SettingsManager()
         
         # 커스텀 호버 없는 스타일 적용
-        self.custom_style = NoHoverStyle()
+        # self.custom_style = NoHoverStyle()
         
         # 기본 UI 설정
         self.setWindowTitle("LLM 프롬프트 헬퍼")
@@ -428,13 +362,8 @@ class MainWindow(QMainWindow):
         self.tree_view.setFocusPolicy(Qt.NoFocus)  # 포커스 효과 제거
         self.tree_view.setMouseTracking(True)  # 마우스 추적 활성화 (호버 효과 활성화)
         
-        # 호버 이벤트 필터링을 위한 이벤트 필터 설치 
-        hover_filter = HoverEventFilter(self.tree_view)
-        self.tree_view.viewport().installEventFilter(hover_filter)
-        self.tree_view.installEventFilter(hover_filter)
-        
-        # 커스텀 델리게이트 설정 (선택 효과 유지)
-        # 기존 no_hover_delegate 대신에 기본 델리게이트 사용
+        # 더블클릭으로 편집되지 않도록 설정
+        self.tree_view.setEditTriggers(QTreeView.NoEditTriggers)
         
         # 마우스 이벤트 전파 허용
         self.tree_view.setAttribute(Qt.WA_NoMousePropagation, False)
@@ -455,8 +384,14 @@ class MainWindow(QMainWindow):
         """
         self.tree_view.setStyleSheet(inline_style)
         
+        # 클릭 이벤트 연결 - 항목 클릭 시 처리
+        self.tree_view.clicked.connect(self._on_item_clicked)
+        
+        # 더블클릭 이벤트 연결 - 더이상 사용하지 않음 (클릭으로 모든 동작 처리)
+        # self.tree_view.doubleClicked.connect(self._on_item_double_clicked)
+        
         # 커스텀 스타일 적용
-        self.tree_view.setStyle(self.custom_style)
+        # self.tree_view.setStyle(self.custom_style)  # 오류 발생으로 주석 처리
         
         # 트리 뷰의 크기 정책 설정 (수평/수직 확장)
         self.tree_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -1131,6 +1066,16 @@ class MainWindow(QMainWindow):
                 # 체크 상태에 따라 처리
                 is_dir = item_path.is_dir()
                 
+                # 디버깅: 아이템 정보 및 상태 출력
+                print(f"===== 항목 변경 감지 =====")
+                print(f"항목 텍스트: {item.text()}")
+                print(f"현재 체크 상태: {item.checkState()}")
+                print(f"checked 변수 값: {checked}")
+                print(f"is_dir 값: {is_dir}")
+                print(f"현재 checked_items 수: {len(self.checked_items)}")
+                print(f"현재 checked_files: {self.checked_files}")
+                print(f"현재 checked_dirs: {self.checked_dirs}")
+
                 # 이전 체크 상태를 기록
                 was_checked = str(item_path) in self.checked_items
                 
@@ -1150,14 +1095,33 @@ class MainWindow(QMainWindow):
                         else:
                             self.checked_files -= 1
                 
+                # 디버깅: _set_item_checked_state 호출 전 상태 출력
+                print(f"_set_item_checked_state 호출 전:")
+                print(f"업데이트 후 checked_items 수: {len(self.checked_items)}")
+                print(f"업데이트 후 checked_files: {self.checked_files}")
+                print(f"업데이트 후 checked_dirs: {self.checked_dirs}")
+                
                 # 폴더인 경우 하위 항목 상태도 함께 변경
                 if is_dir:
                     logger.debug(f"디렉토리 체크 상태 변경: {item_path}, 체크됨: {checked}")
                     # 하위 항목 모두 동일한 체크 상태로 설정
                     self._set_item_checked_state(item, checked)
                 
+                # 디버깅: _update_parent_checked_state 호출 전 상태 출력
+                print(f"_update_parent_checked_state 호출 전:")
+                print(f"업데이트 후 checked_items 수: {len(self.checked_items)}")
+                print(f"업데이트 후 checked_files: {self.checked_files}")
+                print(f"업데이트 후 checked_dirs: {self.checked_dirs}")
+                
                 # 부모 폴더의 체크 상태 업데이트
                 self._update_parent_checked_state(item)
+                
+                # 디버깅: 모든 처리 완료 후 최종 상태
+                print(f"모든 처리 완료 후:")
+                print(f"최종 checked_items 수: {len(self.checked_items)}")
+                print(f"최종 checked_files: {self.checked_files}")
+                print(f"최종 checked_dirs: {self.checked_dirs}")
+                print(f"================================")
                 
                 # 총 토큰 수 업데이트
                 self._update_token_count()
@@ -1179,33 +1143,41 @@ class MainWindow(QMainWindow):
             item: 대상 아이템
             checked: 설정할 체크 상태 (True: 체크됨, False: 체크 해제됨)
         """
-        # 현재 아이템의 체크 상태 설정
-        check_state = Qt.Checked if checked else Qt.Unchecked
-        item.setCheckState(check_state)
+        # 현재 상태와 설정할 상태를 비교하여 변경이 필요한 경우에만 처리
+        current_qt_check_state = item.checkState()
+        target_qt_check_state = Qt.Checked if checked else Qt.Unchecked
         
-        # 아이템 경로 가져오기 (현재 아이템 상태를 tracked_items에 반영하기 위해)
-        item_path = self._get_item_path(item)
-        if item_path:
-            is_dir = item_path.is_dir()
-            path_str = str(item_path)
+        # 디버깅: 상태 비교 출력
+        print(f"  > 아이템: {item.text()}, 현재 상태: {current_qt_check_state}, 대상 상태: {target_qt_check_state}")
+        
+        # 상태가 이미 원하는 상태이면 중복 시그널 발생을 방지하기 위해 처리하지 않음
+        if current_qt_check_state != target_qt_check_state:
+            # 현재 아이템의 체크 상태 설정
+            item.setCheckState(target_qt_check_state)
             
-            # 이전 체크 상태
-            was_checked = path_str in self.checked_items
-            
-            # 상태가 변경된 경우에만 처리
-            if checked != was_checked:
-                if checked:
-                    self.checked_items.add(path_str)
-                    if is_dir:
-                        self.checked_dirs += 1
+            # 아이템 경로 가져오기 (현재 아이템 상태를 tracked_items에 반영하기 위해)
+            item_path = self._get_item_path(item)
+            if item_path:
+                is_dir = item_path.is_dir()
+                path_str = str(item_path)
+                
+                # 이전 체크 상태
+                was_checked = path_str in self.checked_items
+                
+                # 상태가 변경된 경우에만 처리
+                if checked != was_checked:
+                    if checked:
+                        self.checked_items.add(path_str)
+                        if is_dir:
+                            self.checked_dirs += 1
+                        else:
+                            self.checked_files += 1
                     else:
-                        self.checked_files += 1
-                else:
-                    self.checked_items.discard(path_str)
-                    if is_dir:
-                        self.checked_dirs -= 1
-                    else:
-                        self.checked_files -= 1
+                        self.checked_items.discard(path_str)
+                        if is_dir:
+                            self.checked_dirs -= 1
+                        else:
+                            self.checked_files -= 1
         
         # 모든 자식 아이템 처리
         row_count = item.rowCount()
@@ -1241,39 +1213,44 @@ class MainWindow(QMainWindow):
                 if any_checked and not all_checked:
                     break  # 상태 결정을 위한 충분한 정보 확보
         
-        # 부모 상태 업데이트
-        if all_checked:
-            parent.setCheckState(Qt.Checked)
-        elif any_checked:
-            # 일부만 체크된 경우 부분 체크 상태로 설정
-            parent.setCheckState(Qt.PartiallyChecked)
-        else:
-            parent.setCheckState(Qt.Unchecked)
+        # 부모 상태 결정
+        new_state = Qt.Checked if all_checked else (Qt.PartiallyChecked if any_checked else Qt.Unchecked)
         
-        # 부모 경로 가져오기
-        parent_path = self._get_item_path(parent)
-        if parent_path:
-            is_dir = parent_path.is_dir()
-            path_str = str(parent_path)
+        # 현재 상태와 새 상태를 비교하여 변경이 필요한 경우에만 처리
+        current_state = parent.checkState()
+        
+        # 디버깅: 상태 비교 출력
+        print(f"  > 부모 아이템: {parent.text()}, 현재 상태: {current_state}, 대상 상태: {new_state}")
+        
+        # 상태가 이미 원하는 상태이면 중복 시그널 발생을 방지하기 위해 처리하지 않음
+        if current_state != new_state:
+            # 부모 상태 업데이트
+            parent.setCheckState(new_state)
             
-            # 부모가 체크되었는지 여부 (완전히 체크된 경우만 카운트)
-            is_checked = all_checked
-            was_checked = path_str in self.checked_items
-            
-            # 상태가 변경된 경우에만 처리
-            if is_checked != was_checked:
-                if is_checked:
-                    self.checked_items.add(path_str)
-                    if is_dir:
-                        self.checked_dirs += 1
+            # 부모 경로 가져오기
+            parent_path = self._get_item_path(parent)
+            if parent_path:
+                is_dir = parent_path.is_dir()
+                path_str = str(parent_path)
+                
+                # 부모가 체크되었는지 여부 (완전히 체크된 경우만 카운트)
+                is_checked = all_checked
+                was_checked = path_str in self.checked_items
+                
+                # 상태가 변경된 경우에만 처리
+                if is_checked != was_checked:
+                    if is_checked:
+                        self.checked_items.add(path_str)
+                        if is_dir:
+                            self.checked_dirs += 1
+                        else:
+                            self.checked_files += 1
                     else:
-                        self.checked_files += 1
-                else:
-                    self.checked_items.discard(path_str)
-                    if is_dir:
-                        self.checked_dirs -= 1
-                    else:
-                        self.checked_files -= 1
+                        self.checked_items.discard(path_str)
+                        if is_dir:
+                            self.checked_dirs -= 1
+                        else:
+                            self.checked_files -= 1
         
         # 재귀적으로 상위 부모 상태도 업데이트
         self._update_parent_checked_state(parent)
@@ -1747,4 +1724,66 @@ class MainWindow(QMainWindow):
         msg_box.setWindowTitle("오류")
         msg_box.setText(f"클립보드에 복사하는 중 오류가 발생했습니다:\n{error_text}")
         msg_box.setIcon(QMessageBox.Critical)
-        msg_box.exec() 
+        msg_box.exec()
+
+    def _on_item_clicked(self, index):
+        """
+        트리 뷰 항목 클릭 시 호출되는 슬롯
+        - 파일 항목: 체크박스 상태 토글
+        - 폴더 항목: 확장/축소 상태 토글
+        
+        Args:
+            index: 클릭된 항목의 인덱스
+        """
+        if not index.isValid():
+            return
+            
+        # 인덱스에서 항목 얻기
+        item = self.tree_model.itemFromIndex(index)
+        if not item:
+            return
+        
+        # 체크박스 영역에서 클릭이 발생했는지 확인
+        # 체크박스는 트리 뷰의 가장 왼쪽에 위치 (열 0)
+        rect = self.tree_view.visualRect(index)
+        checkbox_rect_x = rect.x() + 3  # 체크박스 위치 추정
+        checkbox_width = 20  # 체크박스 너비 추정
+        
+        click_pos = self.tree_view.mapFromGlobal(QCursor.pos())
+        is_checkbox_clicked = click_pos.x() >= checkbox_rect_x and click_pos.x() <= checkbox_rect_x + checkbox_width
+        
+        if is_checkbox_clicked:
+            # 체크박스 영역을 클릭한 경우 체크박스 상태 토글
+            if item.isCheckable():
+                current_state = item.checkState()
+                new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+                item.setCheckState(new_state)
+        else:
+            # 폴더 항목인지 확인 (UserRole 데이터가 True인 경우 디렉토리)
+            is_directory = item.data(Qt.UserRole)
+            
+            if is_directory:
+                # 폴더 항목인 경우 확장/축소 토글
+                if self.tree_view.isExpanded(index):
+                    self.tree_view.collapse(index)
+                else:
+                    self.tree_view.expand(index)
+            else:
+                # 파일 항목인 경우 체크박스 상태 토글
+                if item.isCheckable():
+                    current_state = item.checkState()
+                    new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+                    item.setCheckState(new_state)
+        
+        # 체크 상태 변경에 따른 처리는 itemChanged 시그널에 연결된 _on_item_changed 메서드에서 수행됨
+    
+    def _on_item_double_clicked(self, index):
+        """
+        트리 뷰 항목 더블클릭 시 호출되는 슬롯 (더이상 사용하지 않음)
+        clicked 이벤트로 모든 동작을 처리함
+        
+        Args:
+            index: 더블클릭된 항목의 인덱스
+        """
+        pass  # 더이상 사용하지 않음
+    
