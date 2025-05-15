@@ -11,5 +11,7 @@
         <file>icons/file_document.svg</file>
         <file>icons/folder.svg</file>
         <file>icons/folder_open.svg</file>
+        <file>icons/copy_document.svg</file>
+        <file>icons/clear_selection.svg</file>
     </qresource>
 </RCC> 

@@ -534,6 +534,8 @@ class MainWindow(QMainWindow):
         self.file_icon = QIcon(":/icons/file_document.svg")
         self.code_file_icon = QIcon(":/icons/file_code.svg")
         self.doc_file_icon = QIcon(":/icons/file_document.svg")
+        self.copy_icon = QIcon(":/icons/copy_document.svg")
+        self.clear_icon = QIcon(":/icons/clear_selection.svg")
         
         # 일부 특별한 아이콘은 시스템 아이콘 유지
         style = self.style()
@@ -968,7 +970,7 @@ class MainWindow(QMainWindow):
         self.copy_button = QPushButton("Copy to Clipboard")
         self.copy_button.setObjectName("copyButton")
         # Use a simple document icon for copy button
-        self.copy_button.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
+        self.copy_button.setIcon(self.copy_icon)
         # Icon setup
         self.copy_button.setIconSize(QSize(20, 20))
         self.copy_button.setLayoutDirection(Qt.LeftToRight)
@@ -983,7 +985,7 @@ class MainWindow(QMainWindow):
         self.clear_button = QPushButton("Clear Selection")
         self.clear_button.setObjectName("clearButton")
         # Use a simple X icon for clear button
-        self.clear_button.setIcon(self.style().standardIcon(QStyle.SP_DialogCloseButton))
+        self.clear_button.setIcon(self.clear_icon)
         self.clear_button.setIconSize(QSize(20, 20))
         self.clear_button.setLayoutDirection(Qt.LeftToRight)
         self.clear_button.clicked.connect(self._clear_selection)
