@@ -197,7 +197,7 @@ class CheckableItemDelegate(QStyledItemDelegate):
     체크박스 영역 클릭 시에만 체크박스 상태를 변경합니다.
     """
     def editorEvent(self, event, model, option, index):
-        # 더블 클릭, 키 입력 등의 이벤트는 기본 동작으로 처리
+        # 체크박스 클릭 이벤트만 처리 (마우스 릴리즈)
         if event.type() != QEvent.MouseButtonRelease or not index.isValid():
             return super().editorEvent(event, model, option, index)
             
@@ -206,8 +206,281 @@ class CheckableItemDelegate(QStyledItemDelegate):
         if not item or not item.isCheckable() or not item.isEnabled():
             return super().editorEvent(event, model, option, index)
         
-        # 모든 마우스 클릭 이벤트를 QTreeView로 전달
+        # 클릭된 위치가 체크박스 영역인지 확인
+        mouse_pos = event.pos()
+        
+        # 체크박스 영역 계산 - QStyleOptionViewItem 상세 초기화
+        style = option.widget.style() if option.widget else QApplication.style()
+        
+        # QStyleOptionViewItem 상세 설정
+        opt = QStyleOptionViewItem(option)
+        
+        # 아이템 상태 설정
+        if option.widget and option.widget.isEnabled():
+            opt.state |= QStyle.State_Enabled
+        if index == option.widget.currentIndex():
+            opt.state |= QStyle.State_HasFocus
+        
+        # 체크 상태 설정
+        check_state = model.data(index, Qt.CheckStateRole)
+        if check_state == Qt.Checked:
+            opt.state |= QStyle.State_On
+        elif check_state == Qt.PartiallyChecked:
+            opt.state |= QStyle.State_NoChange
+        else:
+            opt.state |= QStyle.State_Off
+            
+        # 체크박스, 아이콘, 텍스트 features 설정
+        if model.data(index, Qt.CheckStateRole) is not None:
+            opt.features |= QStyleOptionViewItem.HasCheckIndicator
+        
+        if model.data(index, Qt.DecorationRole) is not None:
+            opt.features |= QStyleOptionViewItem.HasDecoration
+            
+        if model.data(index, Qt.DisplayRole) is not None:
+            opt.features |= QStyleOptionViewItem.HasDisplay
+        
+        # 체크박스 영역 계산
+        check_rect = style.subElementRect(QStyle.SE_ItemViewItemCheckIndicator, opt, option.widget)
+        
+        # 체크박스 영역이 유효하지 않은 경우 대체 로직
+        if check_rect.width() <= 0 or check_rect.x() < 0:
+            # 기본 지표 값 얻기
+            indicator_width = style.pixelMetric(QStyle.PM_IndicatorWidth, opt, option.widget)
+            indicator_height = style.pixelMetric(QStyle.PM_IndicatorHeight, opt, option.widget)
+            left_margin = style.pixelMetric(QStyle.PM_LayoutLeftMargin, opt, option.widget)
+            
+            # X 좌표 계산 (간단한 계산)
+            x_pos = option.rect.x() + left_margin
+            
+            # Y 좌표 계산 (중앙 정렬, 단순화된 버전)
+            y_pos = option.rect.y() + (option.rect.height() - indicator_height) // 2
+            
+            # 체크박스 영역 계산
+            check_rect = QRect(
+                x_pos,
+                y_pos,
+                indicator_width,
+                indicator_height
+            )
+        
+        # 체크박스 영역 클릭 여부 확인
+        is_checkbox_clicked = check_rect.contains(mouse_pos)
+        
+        if is_checkbox_clicked:
+            # 현재 체크 상태 가져오기
+            current_state = model.data(index, Qt.CheckStateRole)
+            
+            # 체크 상태 토글
+            if current_state == Qt.Checked:
+                new_state = Qt.Unchecked
+            else:
+                new_state = Qt.Checked
+                
+            # 모델에 체크 상태 설정
+            model.setData(index, new_state, Qt.CheckStateRole)
+            
+            # 이벤트 소비(consume)하고 이벤트 전파 중지
+            event.accept()
+            return True
+            
+        # 체크박스 영역 외부 클릭은 이벤트 전달
         return False
+
+class CustomTreeView(QTreeView):
+    """
+    커스텀 트리 뷰 클래스
+    체크박스 클릭 시 폴더 접기/펼치기가 발생하지 않도록 마우스 이벤트를 직접 제어합니다.
+    """
+    # 체크박스 클릭 시그널 정의
+    checkbox_clicked = Signal(QModelIndex)
+    # 항목 클릭 시그널 정의 (체크박스 외부 클릭)
+    item_clicked = Signal(QModelIndex)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._checkbox_click_in_progress = False
+        self._press_pos = None
+        
+        # 중요: QTreeView의 기본 확장/축소 기능 비활성화
+        # 이 플래그를 통해 내부적으로 관리
+        self._manual_expand_collapse = True
+        
+    def mousePressEvent(self, event):
+        """마우스 누름 이벤트 처리"""
+        # 클릭 위치 저장
+        self._press_pos = event.pos()
+        index = self.indexAt(event.pos())
+        
+        if index.isValid():
+            # 체크박스 영역 확인
+            is_checkbox_click = self._is_checkbox_area(index, event.pos())
+            
+            if is_checkbox_click:
+                # 체크박스 클릭 진행 중 플래그 설정
+                self._checkbox_click_in_progress = True
+            
+            # 체크박스 영역 클릭 여부와 관계없이 기본 마우스 이벤트 처리
+            # (체크박스 상태 변경 포함)
+            super().mousePressEvent(event)
+        else:
+            # 유효하지 않은 인덱스에 대한 클릭은 기본 처리
+            super().mousePressEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """마우스 놓음 이벤트 처리"""
+        index = self.indexAt(event.pos())
+        
+        # 체크박스 클릭 진행 중이었는지 확인
+        if self._checkbox_click_in_progress and index.isValid():
+            # 체크박스 클릭 영역에서 마우스를 놓았는지 확인
+            if self._is_checkbox_area(index, event.pos()):
+                # 체크박스 클릭 완료 - 기본 처리 호출 (체크박스 상태 변경)
+                super().mouseReleaseEvent(event)
+                
+                # 체크박스 클릭 시그널 발생
+                self.checkbox_clicked.emit(index)
+                
+                # 체크박스 클릭 플래그 초기화
+                self._checkbox_click_in_progress = False
+                
+                # 이벤트 소비 (clicked 시그널과 확장/축소 방지)
+                event.accept()
+                return
+        
+        # 체크박스 클릭이 아닌 경우
+        self._checkbox_click_in_progress = False
+        
+        # 기본 마우스 릴리스 이벤트 처리
+        super().mouseReleaseEvent(event)
+        
+        # 클릭 완료 후 처리 (체크박스 외부 클릭)
+        if index.isValid() and self._press_pos is not None:
+            # 시작 위치와 종료 위치가 동일한 영역인지 확인 (드래그 방지)
+            start_index = self.indexAt(self._press_pos)
+            if start_index == index and not self._is_checkbox_area(index, event.pos()):
+                # 체크박스 외부 영역 클릭 - 수동으로 확장/축소 처리 또는 파일 체크 상태 변경
+                model = self.model()
+                if model:
+                    item = model.itemFromIndex(index)
+                    if item and item.data(Qt.UserRole):  # 디렉토리인 경우
+                        # 폴더 확장/축소 수동 처리
+                        if self.isExpanded(index):
+                            self.collapse(index)
+                        else:
+                            self.expand(index)
+                    else:  # 파일인 경우
+                        # 체크박스 외부 영역 클릭 시그널 발생
+                        self.item_clicked.emit(index)
+    
+    def mouseDoubleClickEvent(self, event):
+        """더블 클릭 이벤트 처리"""
+        # 더블 클릭은 무시하고 이벤트 소비 (기본 확장/축소 방지)
+        event.accept()
+    
+    # QTreeView의 기본 클릭 처리 방지
+    def keyPressEvent(self, event):
+        # 확장/축소와 관련된 키는 직접 처리 
+        # (Enter, Return, Right, Left 등의 키)
+        key = event.key()
+        current_index = self.currentIndex()
+        
+        if current_index.isValid():
+            if key in (Qt.Key_Right, Qt.Key_Enter, Qt.Key_Return):
+                # 수동으로 확장 처리
+                if not self.isExpanded(current_index):
+                    self.expand(current_index)
+                    event.accept()
+                    return
+            elif key == Qt.Key_Left:
+                # 수동으로 축소 처리
+                if self.isExpanded(current_index):
+                    self.collapse(current_index)
+                    event.accept()
+                    return
+        
+        # 나머지 키 이벤트는 기본 처리
+        super().keyPressEvent(event)
+    
+    def _is_checkbox_area(self, index, pos):
+        """
+        지정된 위치가 체크박스 영역인지 확인
+        
+        Args:
+            index: 항목 인덱스
+            pos: 마우스 위치
+            
+        Returns:
+            체크박스 영역이면 True, 아니면 False
+        """
+        model = self.model()
+        if not model:
+            return False
+            
+        # 체크 역할 데이터가 있는지 확인
+        if not model.data(index, Qt.CheckStateRole):
+            return False
+            
+        # 항목 시각적 영역
+        item_rect = self.visualRect(index)
+        
+        # QStyleOptionViewItem 설정
+        option = QStyleOptionViewItem()
+        option.initFrom(self)
+        option.rect = item_rect
+        
+        # 아이템 상태 설정
+        if self.isEnabled():
+            option.state |= QStyle.State_Enabled
+        if self.currentIndex() == index:
+            option.state |= QStyle.State_HasFocus
+        
+        # 체크 상태 설정
+        check_state = model.data(index, Qt.CheckStateRole)
+        if check_state == Qt.Checked:
+            option.state |= QStyle.State_On
+        elif check_state == Qt.PartiallyChecked:
+            option.state |= QStyle.State_NoChange
+        else:
+            option.state |= QStyle.State_Off
+        
+        # 체크박스 특성 설정
+        option.features |= QStyleOptionViewItem.HasCheckIndicator
+        
+        # 데코레이션 특성 설정
+        if model.data(index, Qt.DecorationRole):
+            option.features |= QStyleOptionViewItem.HasDecoration
+        
+        # 표시 특성 설정
+        if model.data(index, Qt.DisplayRole):
+            option.features |= QStyleOptionViewItem.HasDisplay
+        
+        # 스타일 가져오기
+        style = self.style()
+        
+        # 체크박스 영역 계산
+        check_rect = style.subElementRect(QStyle.SE_ItemViewItemCheckIndicator, option, self)
+        
+        # 유효하지 않은 체크박스 영역인 경우 대체 계산
+        if check_rect.width() <= 0 or check_rect.height() <= 0:
+            # 기본 지표 값 사용
+            indicator_width = style.pixelMetric(QStyle.PM_IndicatorWidth, option, self)
+            indicator_height = style.pixelMetric(QStyle.PM_IndicatorHeight, option, self)
+            
+            # 체크박스 X 위치는 항목 시작 부분 + 약간의 여백
+            check_x = item_rect.x() + style.pixelMetric(QStyle.PM_LayoutLeftMargin)
+            
+            # 체크박스 Y 위치는 항목 중앙에 맞춤
+            check_y = item_rect.y() + (item_rect.height() - indicator_height) // 2
+            
+            # 체크박스 영역 생성
+            check_rect = QRect(check_x, check_y, indicator_width, indicator_height)
+            
+            # 체크박스 영역 좀 더 확장 (클릭 감지 향상)
+            check_rect.adjust(-2, -2, 2, 2)
+        
+        # 마우스 위치가 체크박스 영역 내에 있는지 확인
+        return check_rect.contains(pos)
 
 class MainWindow(QMainWindow):
     """메인 애플리케이션 윈도우"""
@@ -372,8 +645,8 @@ class MainWindow(QMainWindow):
         files_header.setObjectName("panelHeader")
         left_panel_layout.addWidget(files_header)
         
-        # 파일 트리 뷰
-        self.tree_view = QTreeView()
+        # 파일 트리 뷰 - 커스텀 트리 뷰 사용
+        self.tree_view = CustomTreeView()
         self.tree_view.setSelectionMode(QTreeView.NoSelection)
         self.tree_view.setAlternatingRowColors(False)
         self.tree_view.setUniformRowHeights(True)
@@ -405,14 +678,8 @@ class MainWindow(QMainWindow):
         """
         self.tree_view.setStyleSheet(inline_style)
         
-        # 클릭 이벤트 연결 - 항목 클릭 시 처리
-        self.tree_view.clicked.connect(self._on_item_clicked)
-        
-        # 더블클릭 이벤트 연결 - 더이상 사용하지 않음 (클릭으로 모든 동작 처리)
-        # self.tree_view.doubleClicked.connect(self._on_item_double_clicked)
-        
-        # 커스텀 스타일 적용
-        # self.tree_view.setStyle(self.custom_style)  # 오류 발생으로 주석 처리
+        # 기존 clicked 시그널 연결 대신 커스텀 시그널 사용
+        self.tree_view.item_clicked.connect(self._on_item_clicked)
         
         # 트리 뷰의 크기 정책 설정 (수평/수직 확장)
         self.tree_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -425,7 +692,7 @@ class MainWindow(QMainWindow):
         # 트리 뷰 이벤트 연결
         self.tree_model.itemChanged.connect(self._on_item_changed)
         
-        # 커스텀 델리게이트 설정
+        # 커스텀 델리게이트 설정 (체크박스 스타일링을 위해 유지)
         self.checkable_delegate = CheckableItemDelegate()
         self.tree_view.setItemDelegate(self.checkable_delegate)
         
@@ -1590,70 +1857,22 @@ class MainWindow(QMainWindow):
     def _on_item_clicked(self, index):
         """
         트리 뷰 항목 클릭 시 호출되는 슬롯
-        - 클릭된 위치가 체크박스 영역인지 확인
-        - 체크박스 영역 클릭 시: 체크 상태만 토글
-        - 체크박스 외부 클릭 시: 폴더는 확장/축소, 파일은 체크 상태 토글
+        - 이 메서드는 파일 항목 클릭 시에만 호출됩니다.
+        - 폴더 항목 클릭 및 체크박스 클릭은 CustomTreeView에서 직접 처리됩니다.
         """
         if not index.isValid():
             return
             
         # 인덱스에서 항목 얻기
         item = self.tree_model.itemFromIndex(index)
-        if not item or not item.isCheckable() or not item.isEnabled():
+        if not item or not item.isEnabled():
             return
         
-        # 클릭된 항목의 시각적 영역 계산
-        item_rect = self.tree_view.visualRect(index)
-        
-        # 현재 마우스 위치 가져오기
-        mouse_pos = self.tree_view.mapFromGlobal(QCursor.pos())
-        
-        # 체크박스 영역 계산
-        style = self.tree_view.style()
-        opt = QStyleOptionViewItem()
-        opt.initFrom(self.tree_view)
-        opt.rect = item_rect
-        
-        check_rect = style.subElementRect(QStyle.SE_ItemViewItemCheckIndicator, opt, self.tree_view)
-        
-        # 체크박스 위치가 정확하지 않은 경우 대체 로직
-        if check_rect.width() <= 0 or check_rect.x() < 0:
-            indicator_width = style.pixelMetric(QStyle.PM_IndicatorWidth, opt)
-            indicator_height = style.pixelMetric(QStyle.PM_IndicatorHeight, opt)
-            left_margin = style.pixelMetric(QStyle.PM_LayoutLeftMargin, opt)
-            
-            # 체크박스 영역 계산
-            check_rect = QRect(
-                item_rect.x() + left_margin,
-                item_rect.y() + (item_rect.height() - indicator_height) // 2,
-                indicator_width,
-                indicator_height
-            )
-        
-        # 클릭 위치가 체크박스 영역 내에 있는지 확인
-        is_checkbox_clicked = check_rect.contains(mouse_pos)
-        
-        # 폴더 항목인지 확인
-        is_directory = item.data(Qt.UserRole)
-        
-        if is_checkbox_clicked:
-            # 체크박스 영역 클릭 시 체크 상태만 토글
+        # 파일 항목이고 체크 가능한 경우 체크 상태 토글
+        if item.isCheckable() and not item.data(Qt.UserRole):  # 파일 항목인 경우만
             current_state = item.checkState()
             new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
             item.setCheckState(new_state)
-        else:
-            # 체크박스 영역 외부 클릭 시
-            if is_directory:
-                # 폴더 항목인 경우 확장/축소 토글
-                if self.tree_view.isExpanded(index):
-                    self.tree_view.collapse(index)
-                else:
-                    self.tree_view.expand(index)
-            else:
-                # 파일 항목인 경우 체크 상태 토글
-                current_state = item.checkState()
-                new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
-                item.setCheckState(new_state)
                 
         # 참고: 체크박스 상태 변경은 itemChanged 시그널로 처리되어 _on_item_changed 메서드에서 반영됨
     
