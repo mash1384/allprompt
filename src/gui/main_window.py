@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QStyle, QCheckBox, QSizePolicy, QDialog, QDialogButtonBox, QFormLayout,
     QLineEdit, QComboBox, QStyledItemDelegate, QProxyStyle, QStyleOptionViewItem
 )
-from PySide6.QtCore import Qt, QSize, QDir, Signal, Slot, QThread, QSortFilterProxyModel, QModelIndex, QEvent, QObject
+from PySide6.QtCore import Qt, QSize, QDir, Signal, Slot, QThread, QSortFilterProxyModel, QModelIndex, QEvent, QObject, QRect
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon, QAction, QFont, QDesktopServices, QPainter, QCursor
 
 # 파일 스캐너 모듈 임포트
@@ -194,7 +194,7 @@ class TokenizerThread(QThread):
 class CheckableItemDelegate(QStyledItemDelegate):
     """
     체크박스 아이템을 위한 커스텀 델리게이트
-    텍스트 영역 클릭으로도 체크박스 상태 변경을 지원합니다.
+    체크박스 영역 클릭 시에만 체크박스 상태를 변경합니다.
     """
     def editorEvent(self, event, model, option, index):
         # 더블 클릭, 키 입력 등의 이벤트는 기본 동작으로 처리
@@ -205,18 +205,9 @@ class CheckableItemDelegate(QStyledItemDelegate):
         item = model.itemFromIndex(index)
         if not item or not item.isCheckable() or not item.isEnabled():
             return super().editorEvent(event, model, option, index)
-            
-        # 폴더 항목은 기본 동작으로 처리 (확장/축소를 위해)
-        is_directory = item.data(Qt.UserRole)
-        if is_directory:
-            return super().editorEvent(event, model, option, index)
         
-        # 체크박스 상태 토글
-        current_state = item.checkState()
-        new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
-        item.setCheckState(new_state)
-        
-        return True
+        # 모든 마우스 클릭 이벤트를 QTreeView로 전달
+        return False
 
 class MainWindow(QMainWindow):
     """메인 애플리케이션 윈도우"""
@@ -1599,28 +1590,72 @@ class MainWindow(QMainWindow):
     def _on_item_clicked(self, index):
         """
         트리 뷰 항목 클릭 시 호출되는 슬롯
-        - 폴더 항목: 확장/축소 기능만 처리
-        - 체크박스는 Qt 기본 이벤트로 처리 
+        - 클릭된 위치가 체크박스 영역인지 확인
+        - 체크박스 영역 클릭 시: 체크 상태만 토글
+        - 체크박스 외부 클릭 시: 폴더는 확장/축소, 파일은 체크 상태 토글
         """
         if not index.isValid():
             return
             
         # 인덱스에서 항목 얻기
         item = self.tree_model.itemFromIndex(index)
-        if not item:
+        if not item or not item.isCheckable() or not item.isEnabled():
             return
+        
+        # 클릭된 항목의 시각적 영역 계산
+        item_rect = self.tree_view.visualRect(index)
+        
+        # 현재 마우스 위치 가져오기
+        mouse_pos = self.tree_view.mapFromGlobal(QCursor.pos())
+        
+        # 체크박스 영역 계산
+        style = self.tree_view.style()
+        opt = QStyleOptionViewItem()
+        opt.initFrom(self.tree_view)
+        opt.rect = item_rect
+        
+        check_rect = style.subElementRect(QStyle.SE_ItemViewItemCheckIndicator, opt, self.tree_view)
+        
+        # 체크박스 위치가 정확하지 않은 경우 대체 로직
+        if check_rect.width() <= 0 or check_rect.x() < 0:
+            indicator_width = style.pixelMetric(QStyle.PM_IndicatorWidth, opt)
+            indicator_height = style.pixelMetric(QStyle.PM_IndicatorHeight, opt)
+            left_margin = style.pixelMetric(QStyle.PM_LayoutLeftMargin, opt)
+            
+            # 체크박스 영역 계산
+            check_rect = QRect(
+                item_rect.x() + left_margin,
+                item_rect.y() + (item_rect.height() - indicator_height) // 2,
+                indicator_width,
+                indicator_height
+            )
+        
+        # 클릭 위치가 체크박스 영역 내에 있는지 확인
+        is_checkbox_clicked = check_rect.contains(mouse_pos)
         
         # 폴더 항목인지 확인
         is_directory = item.data(Qt.UserRole)
         
-        if is_directory:
-            # 폴더 항목인 경우 확장/축소 토글
-            if self.tree_view.isExpanded(index):
-                self.tree_view.collapse(index)
+        if is_checkbox_clicked:
+            # 체크박스 영역 클릭 시 체크 상태만 토글
+            current_state = item.checkState()
+            new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+            item.setCheckState(new_state)
+        else:
+            # 체크박스 영역 외부 클릭 시
+            if is_directory:
+                # 폴더 항목인 경우 확장/축소 토글
+                if self.tree_view.isExpanded(index):
+                    self.tree_view.collapse(index)
+                else:
+                    self.tree_view.expand(index)
             else:
-                self.tree_view.expand(index)
-        
-        # 체크박스 상태 변경은 Qt 기본 이벤트에 의해 itemChanged 시그널로 처리됨
+                # 파일 항목인 경우 체크 상태 토글
+                current_state = item.checkState()
+                new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+                item.setCheckState(new_state)
+                
+        # 참고: 체크박스 상태 변경은 itemChanged 시그널로 처리되어 _on_item_changed 메서드에서 반영됨
     
     def _on_item_double_clicked(self, index):
         """
