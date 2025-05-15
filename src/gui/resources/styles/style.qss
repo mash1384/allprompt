@@ -318,6 +318,21 @@ QTreeView::branch:selected {
     background-color: transparent;
 }
 
+/* 브랜치 아이콘 스타일 추가 */
+QTreeView::branch:has-children:!has-siblings:closed,
+QTreeView::branch:closed:has-children:has-siblings {
+    border-image: none;
+    image: url(:/icons/branch_closed.svg);
+    padding: 1px;
+}
+
+QTreeView::branch:open:has-children:!has-siblings,
+QTreeView::branch:open:has-children:has-siblings {
+    border-image: none;
+    image: url(:/icons/branch_open.svg);
+    padding: 1px;
+}
+
 /* 체크박스 스타일 */
 QTreeView::indicator {
     width: 16px;
