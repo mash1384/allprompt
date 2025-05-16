@@ -266,7 +266,7 @@ def generate_file_contents(
     
     contents.append("</file_contents>")
     
-    return f"{file_map}\n\n{'\n'.join(contents)}"
+    return "\n".join(contents)
 
 def generate_full_output(
     root_path: Union[str, Path], 

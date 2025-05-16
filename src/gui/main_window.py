@@ -33,95 +33,12 @@ from src.core.tokenizer import Tokenizer
 # .gitignore 필터링 모듈 임포트
 from src.core.filter import GitignoreFilter
 # 출력 포맷팅 모듈 임포트
-from src.core.output_formatter import generate_file_map, generate_file_contents, generate_full_output
+from src.core.output_formatter import generate_file_map, generate_file_contents, generate_full_output, EXTENSION_TO_LANGUAGE
 # 클립보드 유틸리티 모듈 임포트
 from src.utils.clipboard_utils import copy_to_clipboard
 from src.core.sort_utils import sort_items  # 정렬 유틸리티 임포트
 
 logger = logging.getLogger(__name__)
-
-# 파일 확장자에 해당하는 프로그래밍 언어 식별자 매핑
-FILE_EXTENSIONS_TO_LANGUAGE = {
-    # C 계열
-    '.c': 'c',
-    '.h': 'c',
-    '.cpp': 'cpp',
-    '.hpp': 'cpp',
-    '.cc': 'cpp',
-    '.cxx': 'cpp',
-    '.c++': 'cpp',
-    
-    # 웹 개발
-    '.html': 'html',
-    '.htm': 'html',
-    '.xhtml': 'html',
-    '.css': 'css',
-    '.scss': 'scss',
-    '.sass': 'sass',
-    '.less': 'less',
-    '.js': 'javascript',
-    '.jsx': 'jsx',
-    '.ts': 'typescript',
-    '.tsx': 'tsx',
-    
-    # Python
-    '.py': 'python',
-    '.pyw': 'python',
-    '.pyx': 'python',
-    '.pxd': 'python',
-    '.pyi': 'python',
-    '.ipynb': 'jupyter',
-    
-    # Java & JVM 기반
-    '.java': 'java',
-    '.kt': 'kotlin',
-    '.kts': 'kotlin',
-    '.scala': 'scala',
-    '.groovy': 'groovy',
-    
-    # C#, .NET
-    '.cs': 'csharp',
-    '.vb': 'vb',
-    '.fs': 'fsharp',
-    
-    # Ruby & PHP
-    '.rb': 'ruby',
-    '.php': 'php',
-    
-    # 시스템 프로그래밍
-    '.go': 'go',
-    '.rs': 'rust',
-    '.swift': 'swift',
-    
-    # 스크립트 언어
-    '.sh': 'bash',
-    '.bash': 'bash',
-    '.zsh': 'bash',
-    '.ps1': 'powershell',
-    '.bat': 'batch',
-    '.cmd': 'batch',
-    
-    # 마크업 & 데이터
-    '.md': 'markdown',
-    '.markdown': 'markdown',
-    '.json': 'json',
-    '.yaml': 'yaml',
-    '.yml': 'yaml',
-    '.xml': 'xml',
-    '.toml': 'toml',
-    '.ini': 'ini',
-    '.cfg': 'ini',
-    '.csv': 'csv',
-    '.tsv': 'tsv',
-    
-    # 기타
-    '.sql': 'sql',
-    '.graphql': 'graphql',
-    '.gql': 'graphql',
-    '.tex': 'latex',
-    '.dockerfile': 'dockerfile',
-    '.gitignore': 'gitignore',
-}
 
 class TokenizerThread(QThread):
     """
@@ -1208,7 +1125,7 @@ class MainWindow(QMainWindow):
                     if ext in self.extension_icon_map:
                         item.setIcon(self.extension_icon_map[ext])
                         # 언어 정보 추가
-                        language = FILE_EXTENSIONS_TO_LANGUAGE.get(ext)
+                        language = EXTENSION_TO_LANGUAGE.get(ext)
                         if language:
                             file_info.append(f"언어: {language}")
                     else:
