@@ -157,11 +157,11 @@ QPushButton:disabled {
 QPushButton#copyButton {
     background-color: #222222;
     color: #E0E0E0;
-    border: none;
+    border: 1px solid #3A3A3A;
     border-radius: 3px;
-    padding: 6px 10px;
-    min-width: 90px;
-    min-height: 30px;
+    padding: 4px 8px;
+    min-width: 80px;
+    min-height: 28px;
     font-weight: 400;
     font-size: 13px;
     text-align: center;
@@ -169,47 +169,52 @@ QPushButton#copyButton {
 
 QPushButton#copyButton:hover {
     background-color: #2A2A2A;
+    border: 1px solid #454545;
 }
 
 QPushButton#copyButton:pressed {
     background-color: #151515;
+    border: 1px solid #3A3A3A;
 }
 
 QPushButton#copyButton:disabled {
     background-color: #151515;
     color: #4A4A4A;
+    border: 1px solid #2A2A2A;
 }
 
 /* 폴더 열기 버튼 */
 QPushButton#openFolderButton {
     background-color: #222222;
     color: #E0E0E0;
-    border: none;
+    border: 1px solid #3A3A3A;
     border-radius: 3px;
-    padding: 6px 10px;
-    min-width: 90px;
-    min-height: 30px;
-    text-align: left;
+    padding: 4px 8px;
+    min-width: 80px;
+    min-height: 28px;
+    text-align: center;
 }
 
 QPushButton#openFolderButton:hover {
     background-color: #2A2A2A;
+    border: 1px solid #454545;
 }
 
 /* 클리어 버튼 */
 QPushButton#clearButton {
     background-color: #222222;
     color: #E0E0E0;
-    border: none;
+    border: 1px solid #3A3A3A;
     border-radius: 3px;
-    padding: 6px 10px;
-    min-width: 90px;
-    min-height: 30px;
-    text-align: left;
+    padding: 4px 8px;
+    min-width: 80px;
+    min-height: 28px;
+    text-align: center;
 }
 
 QPushButton#clearButton:hover {
     background-color: #2A2A2A;
+    border: 1px solid #454545;
 }
 
 /* 트리 뷰 스타일 */

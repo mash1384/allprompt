@@ -599,10 +599,12 @@ class MainWindow(QMainWindow):
         self.open_folder_button = QPushButton("Open Folder")
         self.open_folder_button.setObjectName("openFolderButton")
         self.open_folder_button.setIcon(self.folder_icon)
+        # 아이콘 사이즈 설정
+        self.open_folder_button.setIconSize(QSize(14, 14))
         self.open_folder_button.clicked.connect(self._open_folder_dialog)
         # Button size policy setup - fill width
         self.open_folder_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.open_folder_button.setMinimumHeight(36)  # 버튼 높이 조정
+        self.open_folder_button.setMinimumHeight(28)  # 버튼 높이 조정
         folder_layout.addWidget(self.open_folder_button)
         
         # 현재 폴더 경로를 표시할 수평 레이아웃 생성
@@ -701,12 +703,12 @@ class MainWindow(QMainWindow):
         self.copy_button.setIcon(self.copy_icon)
         # Icon setup
         self.copy_button.setIconSize(QSize(14, 14))  # 작은 아이콘
-        self.copy_button.setLayoutDirection(Qt.LeftToRight)
+        # 중앙 정렬 레이아웃 설정
         self.copy_button.clicked.connect(self._copy_to_clipboard)
         self.copy_button.setEnabled(False)  # Initially disabled
         # Copy button size policy
         self.copy_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.copy_button.setMinimumHeight(36)  # 버튼 높이 조정
+        self.copy_button.setMinimumHeight(28)  # 버튼 높이 조정
         action_layout.addWidget(self.copy_button)
         
         # Clear selection button
@@ -715,11 +717,11 @@ class MainWindow(QMainWindow):
         # Use a simple X icon for clear button
         self.clear_button.setIcon(self.clear_icon)
         self.clear_button.setIconSize(QSize(14, 14))  # 작은 아이콘
-        self.clear_button.setLayoutDirection(Qt.LeftToRight)
+        # 중앙 정렬 레이아웃 설정
         self.clear_button.clicked.connect(self._clear_selection)
         self.clear_button.setEnabled(False)  # Initially disabled
         self.clear_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.clear_button.setMinimumHeight(36)  # 버튼 높이 조정
+        self.clear_button.setMinimumHeight(28)  # 버튼 높이 조정
         action_layout.addWidget(self.clear_button)
         
         right_panel_layout.addWidget(action_container)
