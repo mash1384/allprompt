@@ -512,19 +512,19 @@ class MainWindow(QMainWindow):
         
         # Main layout (vertical)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-        main_layout.setSpacing(12)  # Layout element spacing
+        main_layout.setContentsMargins(6, 6, 6, 6)
+        main_layout.setSpacing(6)  # 더 미니멀한 간격
         
         # Left-right panel splitter
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(2)  # Splitter handle width
+        splitter.setHandleWidth(1)  # 더 얇은 스플리터 핸들
         splitter.setChildrenCollapsible(False)  # Prevent children from being fully collapsed
         
         # ===== Left Panel (File Tree View) =====
         left_panel = QWidget()
         left_panel.setObjectName("leftPanel")
         left_panel_layout = QVBoxLayout(left_panel)
-        left_panel_layout.setContentsMargins(10, 10, 10, 10)
+        left_panel_layout.setContentsMargins(8, 8, 8, 8)  # 일관된 여백
         
         # Size policy setup (horizontal/vertical expansion)
         left_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -579,7 +579,7 @@ class MainWindow(QMainWindow):
         right_panel = QWidget()
         right_panel.setObjectName("rightPanel")
         right_panel_layout = QVBoxLayout(right_panel)
-        right_panel_layout.setContentsMargins(10, 10, 10, 10)
+        right_panel_layout.setContentsMargins(8, 8, 8, 8)  # 일관된 여백
         
         # Size policy setup (fixed horizontal, expanding vertical)
         right_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -593,7 +593,7 @@ class MainWindow(QMainWindow):
         folder_group = QWidget()
         folder_layout = QVBoxLayout(folder_group)
         folder_layout.setContentsMargins(0, 0, 0, 0)
-        folder_layout.setSpacing(10)  # Add spacing between elements
+        folder_layout.setSpacing(6)  # 미니멀한 간격
         
         # Open folder button
         self.open_folder_button = QPushButton("Open Folder")
@@ -602,7 +602,7 @@ class MainWindow(QMainWindow):
         self.open_folder_button.clicked.connect(self._open_folder_dialog)
         # Button size policy setup - fill width
         self.open_folder_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.open_folder_button.setMinimumHeight(40)  # Increase button height
+        self.open_folder_button.setMinimumHeight(36)  # 버튼 높이 조정
         folder_layout.addWidget(self.open_folder_button)
         
         # 현재 폴더 경로를 표시할 수평 레이아웃 생성
@@ -637,7 +637,7 @@ class MainWindow(QMainWindow):
         info_container = QWidget()
         info_layout = QVBoxLayout(info_container)
         info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(12)  # Increase info item spacing
+        info_layout.setSpacing(6)  # 미니멀한 간격
         
         info_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         
@@ -675,7 +675,6 @@ class MainWindow(QMainWindow):
         
         self.total_tokens_count = QLabel("0")
         self.total_tokens_count.setProperty("infoValue", True)
-        self.total_tokens_count.setObjectName("total_tokens_count")  # ID 변경
         self.total_tokens_count.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)  # Minimum size
         self.total_tokens_count.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # Right align text
         token_count_layout.addWidget(self.total_tokens_count)
@@ -693,7 +692,7 @@ class MainWindow(QMainWindow):
         action_container = QWidget()
         action_layout = QVBoxLayout(action_container)
         action_layout.setContentsMargins(0, 0, 0, 0)
-        action_layout.setSpacing(10)  # Add spacing between buttons
+        action_layout.setSpacing(6)  # 미니멀한 간격
         
         # Copy to clipboard button
         self.copy_button = QPushButton("Copy to Clipboard")
@@ -701,13 +700,13 @@ class MainWindow(QMainWindow):
         # Use a simple document icon for copy button
         self.copy_button.setIcon(self.copy_icon)
         # Icon setup
-        self.copy_button.setIconSize(QSize(20, 20))
+        self.copy_button.setIconSize(QSize(14, 14))  # 작은 아이콘
         self.copy_button.setLayoutDirection(Qt.LeftToRight)
         self.copy_button.clicked.connect(self._copy_to_clipboard)
         self.copy_button.setEnabled(False)  # Initially disabled
         # Copy button size policy
         self.copy_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.copy_button.setMinimumHeight(44)
+        self.copy_button.setMinimumHeight(36)  # 버튼 높이 조정
         action_layout.addWidget(self.copy_button)
         
         # Clear selection button
@@ -715,12 +714,12 @@ class MainWindow(QMainWindow):
         self.clear_button.setObjectName("clearButton")
         # Use a simple X icon for clear button
         self.clear_button.setIcon(self.clear_icon)
-        self.clear_button.setIconSize(QSize(20, 20))
+        self.clear_button.setIconSize(QSize(14, 14))  # 작은 아이콘
         self.clear_button.setLayoutDirection(Qt.LeftToRight)
         self.clear_button.clicked.connect(self._clear_selection)
         self.clear_button.setEnabled(False)  # Initially disabled
         self.clear_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.clear_button.setMinimumHeight(44)
+        self.clear_button.setMinimumHeight(36)  # 버튼 높이 조정
         action_layout.addWidget(self.clear_button)
         
         right_panel_layout.addWidget(action_container)
@@ -732,8 +731,8 @@ class MainWindow(QMainWindow):
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)
         
-        # Set window minimum size (more spacious)
-        self.setMinimumSize(1000, 700)
+        # Set window minimum size
+        self.setMinimumSize(900, 600)  # 윈도우 크기 조정
         
         # Set splitter initial size ratio (left:right = 7:3)
         splitter.setSizes([700, 300])
@@ -746,7 +745,7 @@ class MainWindow(QMainWindow):
         
         # Create status bar
         status_bar = QStatusBar()
-        status_bar.setFixedHeight(24)  # Set a fixed height for the status bar
+        status_bar.setFixedHeight(22)  # 상태 바 높이 조정
         self.setStatusBar(status_bar)
         
         # Status message label
@@ -763,7 +762,7 @@ class MainWindow(QMainWindow):
         
         # Window size and title
         self.setWindowTitle("LLM Prompt Helper")
-        self.resize(1200, 800)  # Initial window size
+        self.resize(1100, 700)  # 윈도우 크기 조정
         
         # Window icon
         self.setWindowIcon(self.style().standardIcon(QStyle.SP_FileDialogInfoView))
