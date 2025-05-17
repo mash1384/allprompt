@@ -299,7 +299,7 @@ QTreeView::item {
 } */
 
 QTreeView::item:selected, QTreeView::item:selected:active {
-    background-color: rgba(0, 122, 204, 0.2);
+    background-color: transparent;
     color: #D0D0D0;
     border: none;
 }
@@ -311,10 +311,12 @@ QTreeView::branch {
 
 QTreeView::branch:hover {
     background-color: transparent;
+    border: none;
 }
 
 QTreeView::branch:selected {
     background-color: transparent;
+    border: none;
 }
 
 /* 브랜치 아이콘 스타일 개선 */

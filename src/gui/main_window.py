@@ -735,7 +735,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #3C3C3C;
                 border-radius: 6px;
                 padding: 4px;
-                selection-background-color: #264F78;
+                selection-background-color: transparent;
             }
             
             QTreeView::item {
@@ -748,9 +748,9 @@ class MainWindow(QMainWindow):
                 border: 1px solid #3C3C3C;
             } */
             
-            QTreeView::item:selected {
+            /* QTreeView::item:selected {
                 background-color: #264F78;
-            }
+            } */
             
             QScrollBar:vertical {
                 border: none;
