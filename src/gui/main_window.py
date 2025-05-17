@@ -379,9 +379,20 @@ class CustomTreeView(QTreeView):
                 model = self.model()
                 if model:
                     item = model.itemFromIndex(index)
-                    if not (item and item.data(Qt.UserRole)):  # 파일인 경우만
+                    if item and item.data(Qt.UserRole):  # 디렉토리인 경우
+                        # 폴더 확장/축소 수동 처리
+                        if self.isExpanded(index):
+                            self.collapse(index)
+                        else:
+                            self.expand(index)
+                        # 이벤트 소비
+                        event.accept()
+                    elif not (item and item.data(Qt.UserRole)):  # 파일인 경우만
                         # 일반 아이템 영역 클릭 시그널 발생 (파일만)
                         self.item_clicked.emit(index)
+                        
+        # 클릭 위치 초기화
+        self._press_pos = None
     
     def mouseDoubleClickEvent(self, event):
         """더블 클릭 이벤트 처리"""
