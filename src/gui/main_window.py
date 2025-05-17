@@ -296,14 +296,13 @@ class CustomTreeView(QTreeView):
     item_clicked = Signal(QModelIndex)
     
     def __init__(self, parent=None):
+        """커스텀 트리 뷰 초기화"""
         super().__init__(parent)
-        self._checkbox_click_in_progress = False
+        # 클릭 위치 저장 변수
         self._press_pos = None
-        
-        # 중요: QTreeView의 기본 확장/축소 기능 비활성화
-        # 이 플래그를 통해 내부적으로 관리
-        self._manual_expand_collapse = True
-        
+        # 체크박스 클릭 진행 중 플래그
+        self._checkbox_click_in_progress = False
+    
     def mousePressEvent(self, event):
         """마우스 누름 이벤트 처리"""
         # 클릭 위치 저장
@@ -319,7 +318,6 @@ class CustomTreeView(QTreeView):
                 self._checkbox_click_in_progress = True
             
             # 체크박스 영역 클릭 여부와 관계없이 기본 마우스 이벤트 처리
-            # (체크박스 상태 변경 포함)
             super().mousePressEvent(event)
         else:
             # 유효하지 않은 인덱스에 대한 클릭은 기본 처리
@@ -329,8 +327,29 @@ class CustomTreeView(QTreeView):
         """마우스 놓음 이벤트 처리"""
         index = self.indexAt(event.pos())
         
+        if not index.isValid():
+            # 유효하지 않은 인덱스에 대한 클릭은 기본 처리
+            super().mouseReleaseEvent(event)
+            return
+            
+        # 브랜치 인디케이터 영역 클릭 확인
+        if self._is_branch_indicator_area(index, event.pos()):
+            # 모델에서 해당 항목이 디렉토리인지 확인
+            model = self.model()
+            if model:
+                item = model.itemFromIndex(index)
+                if item and item.data(Qt.UserRole):  # 디렉토리인 경우
+                    # 폴더 확장/축소 수동 처리
+                    if self.isExpanded(index):
+                        self.collapse(index)
+                    else:
+                        self.expand(index)
+                    # 이벤트 소비
+                    event.accept()
+                    return
+            
         # 체크박스 클릭 진행 중이었는지 확인
-        if self._checkbox_click_in_progress and index.isValid():
+        if self._checkbox_click_in_progress:
             # 체크박스 클릭 영역에서 마우스를 놓았는지 확인
             if self._is_checkbox_area(index, event.pos()):
                 # 체크박스 클릭 완료 - 기본 처리 호출 (체크박스 상태 변경)
@@ -342,33 +361,26 @@ class CustomTreeView(QTreeView):
                 # 체크박스 클릭 플래그 초기화
                 self._checkbox_click_in_progress = False
                 
-                # 이벤트 소비 (clicked 시그널과 확장/축소 방지)
+                # 이벤트 소비
                 event.accept()
                 return
-        
-        # 체크박스 클릭이 아닌 경우
+                
+        # 체크박스 클릭이 아닌 일반 아이템 영역 클릭 처리
         self._checkbox_click_in_progress = False
         
         # 기본 마우스 릴리스 이벤트 처리
         super().mouseReleaseEvent(event)
         
         # 클릭 완료 후 처리 (체크박스 외부 클릭)
-        if index.isValid() and self._press_pos is not None:
+        if self._press_pos is not None:
             # 시작 위치와 종료 위치가 동일한 영역인지 확인 (드래그 방지)
             start_index = self.indexAt(self._press_pos)
             if start_index == index and not self._is_checkbox_area(index, event.pos()):
-                # 체크박스 외부 영역 클릭 - 수동으로 확장/축소 처리 또는 파일 체크 상태 변경
                 model = self.model()
                 if model:
                     item = model.itemFromIndex(index)
-                    if item and item.data(Qt.UserRole):  # 디렉토리인 경우
-                        # 폴더 확장/축소 수동 처리
-                        if self.isExpanded(index):
-                            self.collapse(index)
-                        else:
-                            self.expand(index)
-                    else:  # 파일인 경우
-                        # 체크박스 외부 영역 클릭 시그널 발생
+                    if not (item and item.data(Qt.UserRole)):  # 파일인 경우만
+                        # 일반 아이템 영역 클릭 시그널 발생 (파일만)
                         self.item_clicked.emit(index)
     
     def mouseDoubleClickEvent(self, event):
@@ -378,24 +390,38 @@ class CustomTreeView(QTreeView):
     
     # QTreeView의 기본 클릭 처리 방지
     def keyPressEvent(self, event):
+        """키 입력 이벤트 처리"""
         # 확장/축소와 관련된 키는 직접 처리 
         # (Enter, Return, Right, Left 등의 키)
         key = event.key()
         current_index = self.currentIndex()
         
         if current_index.isValid():
-            if key in (Qt.Key_Right, Qt.Key_Enter, Qt.Key_Return):
-                # 수동으로 확장 처리
-                if not self.isExpanded(current_index):
-                    self.expand(current_index)
-                    event.accept()
-                    return
-            elif key == Qt.Key_Left:
-                # 수동으로 축소 처리
-                if self.isExpanded(current_index):
-                    self.collapse(current_index)
-                    event.accept()
-                    return
+            # 모델에서 현재 항목이 디렉토리인지 확인
+            model = self.model()
+            if model:
+                item = model.itemFromIndex(current_index)
+                is_directory = item and item.data(Qt.UserRole)
+                
+                if key in (Qt.Key_Right, Qt.Key_Enter, Qt.Key_Return):
+                    # 폴더인 경우에만 확장 처리
+                    if is_directory:
+                        if not self.isExpanded(current_index):
+                            self.expand(current_index)
+                            event.accept()
+                            return
+                    # 폴더가 아닌 경우 Enter/Return은 항목 클릭으로 처리
+                    elif key in (Qt.Key_Enter, Qt.Key_Return):
+                        self.item_clicked.emit(current_index)
+                        event.accept()
+                        return
+                elif key == Qt.Key_Left:
+                    # 폴더인 경우에만 축소 처리
+                    if is_directory:
+                        if self.isExpanded(current_index):
+                            self.collapse(current_index)
+                            event.accept()
+                            return
         
         # 나머지 키 이벤트는 기본 처리
         super().keyPressEvent(event)
@@ -479,6 +505,38 @@ class CustomTreeView(QTreeView):
         
         # 마우스 위치가 체크박스 영역 내에 있는지 확인
         return check_rect.contains(pos)
+    
+    def _is_branch_indicator_area(self, index, pos):
+        """
+        지정된 위치가 브랜치 인디케이터(폴더 확장/축소 아이콘) 영역인지 확인
+        
+        Args:
+            index: 항목 인덱스
+            pos: 마우스 위치
+            
+        Returns:
+            브랜치 인디케이터 영역이면 True, 아니면 False
+        """
+        # 항목 시각적 영역
+        rect = self.visualRect(index)
+        
+        # 브랜치 인디케이터 위치는 항목 앞쪽에 있음
+        left_margin = self.indentation()
+        
+        # 항목의 깊이
+        depth = 0
+        parent = index.parent()
+        while parent.isValid():
+            depth += 1
+            parent = parent.parent()
+        
+        # 항목 들여쓰기까지의 영역이 브랜치 인디케이터 영역
+        branch_rect_width = depth * left_margin
+        branch_rect = QRect(rect.x() - branch_rect_width, rect.y(), 
+                          branch_rect_width, rect.height())
+        
+        # 마우스 위치가 브랜치 인디케이터 영역 내에 있는지 확인
+        return branch_rect.contains(pos)
 
 class MainWindow(QMainWindow):
     """메인 애플리케이션 윈도우"""
@@ -685,10 +743,10 @@ class MainWindow(QMainWindow):
                 border-radius: 4px;
             }
             
-            QTreeView::item:hover {
+            /* QTreeView::item:hover {
                 background-color: #2A2D2E;
                 border: 1px solid #3C3C3C;
-            }
+            } */
             
             QTreeView::item:selected {
                 background-color: #264F78;
@@ -1829,7 +1887,7 @@ class MainWindow(QMainWindow):
         """
         트리 뷰 항목 클릭 시 호출되는 슬롯
         - 이 메서드는 파일 항목 클릭 시에만 호출됩니다.
-        - 폴더 항목 클릭 및 체크박스 클릭은 CustomTreeView에서 직접 처리됩니다.
+        - CustomTreeView의 mouseReleaseEvent에서 보내는 시그널에 의해 트리거됩니다.
         """
         if not index.isValid():
             return
@@ -1839,7 +1897,7 @@ class MainWindow(QMainWindow):
         if not item or not item.isEnabled():
             return
         
-        # 파일 항목이고 체크 가능한 경우 체크 상태 토글
+        # 파일 항목인 경우 체크 상태 토글
         if item.isCheckable() and not item.data(Qt.UserRole):  # 파일 항목인 경우만
             current_state = item.checkState()
             new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked

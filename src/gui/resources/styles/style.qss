@@ -294,9 +294,9 @@ QTreeView::item {
     border: none;
 }
 
-QTreeView::item:hover {
+/* QTreeView::item:hover {
     background-color: rgba(255, 255, 255, 0.05);
-}
+} */
 
 QTreeView::item:selected, QTreeView::item:selected:active {
     background-color: rgba(0, 122, 204, 0.2);
@@ -322,14 +322,14 @@ QTreeView::branch:has-children:!has-siblings:closed,
 QTreeView::branch:closed:has-children:has-siblings {
     border-image: none;
     image: url(:/icons/branch_closed.svg);
-    padding: 2px;
+    padding: 0px;
 }
 
 QTreeView::branch:open:has-children:!has-siblings,
 QTreeView::branch:open:has-children:has-siblings {
     border-image: none;
     image: url(:/icons/branch_open.svg);
-    padding: 2px;
+    padding: 0px;
 }
 
 /* 체크박스 스타일 */
