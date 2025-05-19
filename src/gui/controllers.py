@@ -29,10 +29,11 @@ class FileTreeController(QObject):
     
     # 시그널 정의
     folder_loaded_signal = Signal(list)  # 폴더 로드 완료 시 발생 (items 목록 전달)
-    selection_changed_signal = Signal(int, int, set)  # 선택 변경 시 발생 (파일 수, 폴더 수, 체크된 항목 집합)
+    selection_changed_signal = Signal(int, int)  # 선택 변경 시 발생 (파일 수, 폴더 수)
     model_updated_signal = Signal(QStandardItemModel)  # 모델 업데이트 시 발생 (업데이트된 모델 전달)
     
-    def __init__(self, folder_icon=None, folder_open_icon=None, file_icon=None, code_file_icon=None, doc_file_icon=None):
+    def __init__(self, folder_icon=None, folder_open_icon=None, file_icon=None, code_file_icon=None, 
+                 doc_file_icon=None, symlink_icon=None, binary_icon=None, error_icon=None, image_file_icon=None):
         """
         FileTreeController 초기화
         
@@ -42,6 +43,10 @@ class FileTreeController(QObject):
             file_icon: 일반 파일 아이콘
             code_file_icon: 코드 파일 아이콘
             doc_file_icon: 문서 파일 아이콘
+            symlink_icon: 심볼릭 링크 아이콘
+            binary_icon: 바이너리 파일 아이콘
+            error_icon: 오류 아이콘
+            image_file_icon: 이미지 파일 아이콘
         """
         super().__init__()
         
@@ -51,6 +56,10 @@ class FileTreeController(QObject):
         self.file_icon = file_icon
         self.code_file_icon = code_file_icon
         self.doc_file_icon = doc_file_icon
+        self.symlink_icon = symlink_icon
+        self.binary_icon = binary_icon
+        self.error_icon = error_icon
+        self.image_file_icon = image_file_icon
         
         # 트리 모델 초기화
         self.tree_model = QStandardItemModel()
@@ -60,6 +69,7 @@ class FileTreeController(QObject):
         self.current_folder = None  # 현재 폴더
         self.gitignore_filter = None  # .gitignore 필터
         self.show_hidden = False  # 숨김 파일 표시 여부
+        self.apply_gitignore_rules = True  # .gitignore 규칙 적용 여부
         
         # 체크 상태 추적
         self.checked_items = set()  # 체크된 항목 경로 집합
@@ -68,6 +78,9 @@ class FileTreeController(QObject):
         
         # 시그널 연결 플래그
         self._processing_check_event = False
+        
+        # 트리 모델 시그널 연결
+        self.tree_model.itemChanged.connect(self.handle_item_change)
         
     def load_folder(self, folder_path: str):
         """
@@ -85,10 +98,12 @@ class FileTreeController(QObject):
             self.checked_files = 0
             self.checked_dirs = 0
             
-            # .gitignore 필터 초기화
-            self.gitignore_filter = GitignoreFilter(folder_path)
-            if not self.gitignore_filter.has_gitignore():
-                self.gitignore_filter = None
+            # .gitignore 필터 초기화 (필터링이 활성화된 경우만)
+            self.gitignore_filter = None
+            if self.apply_gitignore_rules:
+                self.gitignore_filter = GitignoreFilter(folder_path)
+                if not self.gitignore_filter.has_gitignore():
+                    self.gitignore_filter = None
                 
             # 파일/폴더 스캔
             include_hidden = self.show_hidden
@@ -482,7 +497,7 @@ class FileTreeController(QObject):
                 self.checked_files += 1
         
         # 선택 변경 시그널 발생
-        self.selection_changed_signal.emit(self.checked_files, self.checked_dirs, self.checked_items)
+        self.selection_changed_signal.emit(self.checked_files, self.checked_dirs)
         
     def clear_selection(self):
         """선택 항목 모두 해제"""
@@ -507,7 +522,7 @@ class FileTreeController(QObject):
             self.checked_dirs = 0
             
             # 선택 변경 시그널 발생
-            self.selection_changed_signal.emit(self.checked_files, self.checked_dirs, self.checked_items)
+            self.selection_changed_signal.emit(self.checked_files, self.checked_dirs)
             
         finally:
             # 시그널 다시 연결
@@ -576,10 +591,17 @@ class FileTreeController(QObject):
         return parent_item
     
     def toggle_hidden_files(self):
-        """숨김 파일/폴더 표시 토글"""
+        """
+        숨김 파일/폴더 표시 토글
+        
+        Returns:
+            bool: 변경된 숨김 파일 표시 상태
+        """
         self.show_hidden = not self.show_hidden
         if self.current_folder:
             self.load_folder(str(self.current_folder))
+            
+        return self.show_hidden
     
     def get_tree_model(self):
         """
@@ -624,4 +646,21 @@ class FileTreeController(QObject):
         Returns:
             체크된 폴더 수
         """
-        return self.checked_dirs 
+        return self.checked_dirs
+    
+    def toggle_gitignore_filter(self):
+        """
+        .gitignore 필터링 설정 토글
+        
+        현재 설정을 반대로 변경하고, 필요시 현재 폴더를 다시 로드합니다.
+        """
+        self.apply_gitignore_rules = not self.apply_gitignore_rules
+        
+        # 로그
+        logger.info(f".gitignore 필터 설정 변경: {self.apply_gitignore_rules}")
+        
+        # 현재 폴더가 있으면 다시 로드
+        if self.current_folder:
+            self.load_folder(str(self.current_folder))
+            
+        return self.apply_gitignore_rules 

@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 class LeftPanelWidget(QWidget):
     """좌측 패널 위젯 (파일 트리)"""
     
-    def __init__(self, parent=None, folder_icon=None, folder_open_icon=None):
+    def __init__(self, parent=None, folder_icon=None, folder_open_icon=None, file_icon=None, 
+                 code_file_icon=None, doc_file_icon=None, symlink_icon=None, 
+                 binary_icon=None, error_icon=None, image_file_icon=None):
         """
         좌측 패널 위젯 초기화
         
@@ -29,14 +31,29 @@ class LeftPanelWidget(QWidget):
             parent: 부모 위젯 (기본값: None)
             folder_icon: 폴더 아이콘 (기본값: None)
             folder_open_icon: 열린 폴더 아이콘 (기본값: None)
+            file_icon: 일반 파일 아이콘 (기본값: None)
+            code_file_icon: 코드 파일 아이콘 (기본값: None)
+            doc_file_icon: 문서 파일 아이콘 (기본값: None)
+            symlink_icon: 심볼릭 링크 아이콘 (기본값: None)
+            binary_icon: 바이너리 파일 아이콘 (기본값: None)
+            error_icon: 오류 아이콘 (기본값: None)
+            image_file_icon: 이미지 파일 아이콘 (기본값: None)
         """
         super().__init__(parent)
         self.setObjectName("leftPanel")
         logger.info("LeftPanelWidget 생성 시작")
         
-        # 아이콘 설정
-        self.folder_icon = folder_icon or QApplication.style().standardIcon(QStyle.SP_DirIcon)
-        self.folder_open_icon = folder_open_icon or QApplication.style().standardIcon(QStyle.SP_DirOpenIcon)
+        # 아이콘 저장
+        style = QApplication.style()
+        self.folder_icon = folder_icon or style.standardIcon(QStyle.SP_DirIcon)
+        self.folder_open_icon = folder_open_icon or style.standardIcon(QStyle.SP_DirOpenIcon)
+        self.file_icon = file_icon or style.standardIcon(QStyle.SP_FileIcon)
+        self.code_file_icon = code_file_icon or style.standardIcon(QStyle.SP_FileIcon)
+        self.doc_file_icon = doc_file_icon or style.standardIcon(QStyle.SP_FileIcon)
+        self.symlink_icon = symlink_icon or style.standardIcon(QStyle.SP_FileLinkIcon)
+        self.binary_icon = binary_icon or style.standardIcon(QStyle.SP_DriveHDIcon)
+        self.error_icon = error_icon or style.standardIcon(QStyle.SP_MessageBoxCritical)
+        self.image_file_icon = image_file_icon or style.standardIcon(QStyle.SP_DirLinkIcon)
         
         self._init_ui()
         logger.info("LeftPanelWidget 생성 완료")
@@ -121,7 +138,7 @@ class LeftPanelWidget(QWidget):
             
         item = self.tree_model.itemFromIndex(index)
         if item and item.data(Qt.UserRole) is True:  # 디렉토리 항목인 경우만
-            # 아이콘 타입에 따라 아이콘 설정
+            # 아이콘 타입에 따라 내부에 저장된 아이콘 사용
             if icon_type == 'folder_open':
                 item.setIcon(self.folder_open_icon)
             else:  # 'folder'

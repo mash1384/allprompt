@@ -157,7 +157,11 @@ class MainWindow(QMainWindow):
             folder_open_icon=self.folder_open_icon,
             file_icon=self.file_icon,
             code_file_icon=self.code_file_icon,
-            doc_file_icon=self.doc_file_icon
+            doc_file_icon=self.doc_file_icon,
+            symlink_icon=self.symlink_icon,
+            binary_icon=self.binary_icon,
+            error_icon=self.error_icon,
+            image_file_icon=self.image_file_icon
         )
         
         # Initialize TokenController
@@ -302,7 +306,14 @@ class MainWindow(QMainWindow):
         # 좌측 패널 (파일 트리 영역)
         self.left_panel = LeftPanelWidget(
             folder_icon=self.folder_icon,
-            folder_open_icon=self.folder_open_icon
+            folder_open_icon=self.folder_open_icon,
+            file_icon=self.file_icon,
+            code_file_icon=self.code_file_icon,
+            doc_file_icon=self.doc_file_icon,
+            symlink_icon=self.symlink_icon,
+            binary_icon=self.binary_icon,
+            error_icon=self.error_icon,
+            image_file_icon=self.image_file_icon
         )
         # 우측 패널 (정보 및 액션 영역)
         self.right_panel = RightPanelWidget(
@@ -355,13 +366,9 @@ class MainWindow(QMainWindow):
         """UI 이벤트 연결"""
         # 좌측 패널 이벤트 연결
         tree_view = self.left_panel.get_tree_view()
-        tree_view.clicked.connect(self._on_item_clicked)
-        tree_view.doubleClicked.connect(self._on_item_double_clicked)
+        # 불필요한 doubleClicked 이벤트 연결 제거 (CustomTreeView에서 이미 처리)
         tree_view.expanded.connect(self._on_item_expanded)
         tree_view.collapsed.connect(self._on_item_collapsed)
-        
-        # 트리 모델의 아이템 체크 상태 변경 이벤트 연결
-        tree_model = self.left_panel.get_tree_model()
         
         # 우측 패널 이벤트 연결
         self.right_panel.open_folder_button.clicked.connect(self._open_folder_dialog)
@@ -371,7 +378,6 @@ class MainWindow(QMainWindow):
         # 컨트롤러가 제공하는 모델로 트리 모델 설정
         tree_model = self.file_tree_controller.get_tree_model()
         self.left_panel.set_tree_model(tree_model)
-        tree_model.itemChanged.connect(self.file_tree_controller.handle_item_change)
     
     def _create_menu(self):
         """메뉴바 생성"""
@@ -413,7 +419,7 @@ class MainWindow(QMainWindow):
         # .gitignore 필터링 액션
         self.gitignore_filter_action = QAction("Apply .&gitignore Rules", self)
         self.gitignore_filter_action.setCheckable(True)
-        self.gitignore_filter_action.setChecked(True)
+        self.gitignore_filter_action.setChecked(True)  # 기본값을 컨트롤러 설정과 일치시킴
         self.gitignore_filter_action.triggered.connect(self._toggle_gitignore_filter)
         
         # 보기 메뉴에 액션 추가
@@ -457,18 +463,13 @@ class MainWindow(QMainWindow):
             folder_path: 로드할 폴더 경로
         """
         try:
-            # 경로 라벨 업데이트
-            self.right_panel.update_folder_path(folder_path)
-            
-            # UI 상태 업데이트
+            # UI 상태 초기화
             self.progress_bar.setValue(0)
             self.statusBar().showMessage("Loading folder...")
             
             # 컨트롤러에 폴더 로드 위임
+            # 폴더 로드 완료 후 folder_loaded_signal을 통해 _on_folder_loaded 호출됨
             self.file_tree_controller.load_folder(folder_path)
-            
-            # 상태 표시줄 업데이트
-            self.statusBar().showMessage(f"Folder loaded: {folder_path}", 3000)
             
         except Exception as e:
             # 오류 처리
@@ -525,7 +526,7 @@ class MainWindow(QMainWindow):
             # 상태 표시줄 업데이트
             self.statusBar().showMessage("Copying selected files to clipboard...")
             
-            # 필요한 정보 수집
+            # 필요한 정보 수집 - FileTreeController에서 직접 가져오기
             root_path = self.file_tree_controller.get_current_folder()
             selected_item_paths = self.file_tree_controller.get_checked_items()
             total_tokens = self.token_controller.total_tokens
@@ -558,20 +559,18 @@ class MainWindow(QMainWindow):
     def _toggle_hidden_files(self):
         """숨김 파일 표시 설정 토글"""
         # FileTreeController에 위임
-        self.file_tree_controller.toggle_hidden_files()
-        # 현재 폴더 다시 로드
-        if self.file_tree_controller.get_current_folder():
-            self._load_folder(str(self.file_tree_controller.get_current_folder()))
+        show_hidden = self.file_tree_controller.toggle_hidden_files()
+        
+        # 체크박스 상태 동기화
+        self.show_hidden_action.setChecked(show_hidden)
     
     def _toggle_gitignore_filter(self):
         """gitignore 필터링 설정 토글"""
-        # 설정 적용
-        # TODO: FileTreeController에 gitignore 필터링 토글 메소드 추가 필요
-        checked = self.gitignore_filter_action.isChecked()
+        # FileTreeController에 위임
+        checked = self.file_tree_controller.toggle_gitignore_filter()
         
-        # 현재 폴더 다시 로드
-        if self.file_tree_controller.get_current_folder():
-            self._load_folder(str(self.file_tree_controller.get_current_folder()))
+        # 체크박스 상태 동기화
+        self.gitignore_filter_action.setChecked(checked)
     
     def _center_window(self):
         """윈도우를 화면 중앙에 위치시킴"""
@@ -615,34 +614,6 @@ class MainWindow(QMainWindow):
         
         event.accept()
     
-    def _on_item_clicked(self, index):
-        """
-        트리 항목 클릭 처리
-        
-        Args:
-            index: 클릭된 항목의 인덱스
-        """
-        # FileTreeController가 클릭 이벤트를 모두 처리하므로 필요 없음
-        pass
-    
-    def _on_item_double_clicked(self, index):
-        """
-        트리 항목 더블 클릭 처리
-        
-        Args:
-            index: 더블 클릭된 항목의 인덱스
-        """
-        # 폴더인 경우 확장/축소
-        model = index.model()
-        item = model.itemFromIndex(index)
-        
-        if item and item.data(Qt.UserRole) is True:  # 디렉토리인 경우
-            tree_view = self.left_panel.get_tree_view()
-            if tree_view.isExpanded(index):
-                tree_view.collapse(index)
-            else:
-                tree_view.expand(index)
-    
     def _on_folder_loaded(self, items):
         """
         폴더 로드 완료 이벤트 처리
@@ -656,6 +627,11 @@ class MainWindow(QMainWindow):
             root_index = tree_view.model().index(row, 0)
             tree_view.expand(root_index)
         
+        # 폴더 경로 업데이트
+        current_folder = self.file_tree_controller.get_current_folder()
+        if current_folder:
+            self.right_panel.update_folder_path(str(current_folder))
+        
         # 버튼 상태 업데이트
         self.right_panel.set_buttons_enabled(
             copy_enabled=False,
@@ -666,18 +642,16 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(100)
         
         # 폴더 로드 완료 메시지
-        current_folder = self.file_tree_controller.get_current_folder()
         if current_folder:
             self.statusBar().showMessage(f"Folder loaded: {current_folder}", 3000)
     
-    def _on_selection_changed(self, files_count, dirs_count, checked_items):
+    def _on_selection_changed(self, files_count, dirs_count):
         """
         선택 변경 이벤트 처리
         
         Args:
             files_count: 선택된 파일 수
             dirs_count: 선택된 디렉토리 수
-            checked_items: 선택된 항목 경로 집합
         """
         # 선택 정보 업데이트
         self.right_panel.update_selection_info(
@@ -692,15 +666,11 @@ class MainWindow(QMainWindow):
             clear_enabled=has_selection
         )
         
-        # 토큰 계산이 필요한 파일 목록 생성
-        files_to_calculate = []
-        
-        for path in checked_items:
-            path_obj = Path(path)
-            if path_obj.is_file():
-                files_to_calculate.append(path_obj)
-        
         # 토큰 계산 시작 (TokenController에 위임)
+        # 컨트롤러에서 체크된 파일 항목만 필터링
+        checked_items = self.file_tree_controller.get_checked_items()
+        files_to_calculate = [Path(path) for path in checked_items if Path(path).is_file()]
+        
         if files_to_calculate:
             self.token_controller.start_calculation(files_to_calculate)
     
@@ -711,7 +681,12 @@ class MainWindow(QMainWindow):
         Args:
             model: 업데이트된 모델
         """
+        # 트리 모델을 좌측 패널에 설정
         self.left_panel.set_tree_model(model)
+        
+        # 트리 뷰 모델 변경 후에는 트리 뷰 스크롤 위치 초기화
+        tree_view = self.left_panel.get_tree_view()
+        tree_view.scrollToTop()
     
     def _handle_copy_status(self, success: bool, message: str):
         """
