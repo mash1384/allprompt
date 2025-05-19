@@ -21,9 +21,7 @@ logger = logging.getLogger(__name__)
 class LeftPanelWidget(QWidget):
     """좌측 패널 위젯 (파일 트리)"""
     
-    def __init__(self, parent=None, folder_icon=None, folder_open_icon=None, file_icon=None, 
-                 code_file_icon=None, doc_file_icon=None, symlink_icon=None, 
-                 binary_icon=None, error_icon=None, image_file_icon=None):
+    def __init__(self, parent=None, folder_icon=None, folder_open_icon=None):
         """
         좌측 패널 위젯 초기화
         
@@ -31,31 +29,22 @@ class LeftPanelWidget(QWidget):
             parent: 부모 위젯 (기본값: None)
             folder_icon: 폴더 아이콘 (기본값: None)
             folder_open_icon: 열린 폴더 아이콘 (기본값: None)
-            file_icon: 일반 파일 아이콘 (기본값: None)
-            code_file_icon: 코드 파일 아이콘 (기본값: None)
-            doc_file_icon: 문서 파일 아이콘 (기본값: None)
-            symlink_icon: 심볼릭 링크 아이콘 (기본값: None)
-            binary_icon: 바이너리 파일 아이콘 (기본값: None)
-            error_icon: 오류 아이콘 (기본값: None)
-            image_file_icon: 이미지 파일 아이콘 (기본값: None)
         """
         super().__init__(parent)
         self.setObjectName("leftPanel")
         logger.info("LeftPanelWidget 생성 시작")
         
-        # 아이콘 저장
+        # 아이콘 저장 (폴더 아이콘만 보관)
         style = QApplication.style()
         self.folder_icon = folder_icon or style.standardIcon(QStyle.SP_DirIcon)
         self.folder_open_icon = folder_open_icon or style.standardIcon(QStyle.SP_DirOpenIcon)
-        self.file_icon = file_icon or style.standardIcon(QStyle.SP_FileIcon)
-        self.code_file_icon = code_file_icon or style.standardIcon(QStyle.SP_FileIcon)
-        self.doc_file_icon = doc_file_icon or style.standardIcon(QStyle.SP_FileIcon)
-        self.symlink_icon = symlink_icon or style.standardIcon(QStyle.SP_FileLinkIcon)
-        self.binary_icon = binary_icon or style.standardIcon(QStyle.SP_DriveHDIcon)
-        self.error_icon = error_icon or style.standardIcon(QStyle.SP_MessageBoxCritical)
-        self.image_file_icon = image_file_icon or style.standardIcon(QStyle.SP_DirLinkIcon)
         
         self._init_ui()
+        
+        # 트리 뷰 확장/축소 시그널 연결
+        self.tree_view.expanded.connect(self.update_item_icon_on_expand)
+        self.tree_view.collapsed.connect(self.update_item_icon_on_collapse)
+        
         logger.info("LeftPanelWidget 생성 완료")
     
     def _init_ui(self):
@@ -161,6 +150,24 @@ class LeftPanelWidget(QWidget):
             트리 뷰 객체
         """
         return self.tree_view
+
+    def update_item_icon_on_expand(self, index):
+        """
+        트리 항목 확장 시 아이콘 업데이트
+        
+        Args:
+            index: 확장된 항목의 인덱스
+        """
+        self.update_item_icon(index, 'folder_open')
+        
+    def update_item_icon_on_collapse(self, index):
+        """
+        트리 항목 축소 시 아이콘 업데이트
+        
+        Args:
+            index: 축소된 항목의 인덱스
+        """
+        self.update_item_icon(index, 'folder')
 
 
 class RightPanelWidget(QWidget):

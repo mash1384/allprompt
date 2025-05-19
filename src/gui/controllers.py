@@ -29,7 +29,7 @@ class FileTreeController(QObject):
     
     # 시그널 정의
     folder_loaded_signal = Signal(list)  # 폴더 로드 완료 시 발생 (items 목록 전달)
-    selection_changed_signal = Signal(int, int)  # 선택 변경 시 발생 (파일 수, 폴더 수)
+    selection_changed_signal = Signal(int, int, set)  # 선택 변경 시 발생 (파일 수, 폴더 수, 체크된 아이템 Set)
     model_updated_signal = Signal(QStandardItemModel)  # 모델 업데이트 시 발생 (업데이트된 모델 전달)
     
     def __init__(self, folder_icon=None, folder_open_icon=None, file_icon=None, code_file_icon=None, 
@@ -485,20 +485,14 @@ class FileTreeController(QObject):
         return self.current_folder / rel_path
     
     def _update_check_stats(self):
-        """checked_items 세트를 기반으로 파일/폴더 카운트 업데이트"""
-        self.checked_files = 0
-        self.checked_dirs = 0
+        """체크 상태 통계 업데이트 및 시그널 발생"""
+        # 체크 상태 통계 계산
+        self.checked_files = sum(1 for path in self.checked_items if Path(path).is_file())
+        self.checked_dirs = sum(1 for path in self.checked_items if Path(path).is_dir())
         
-        for path_str in self.checked_items:
-            path = Path(path_str)
-            if path.is_dir():
-                self.checked_dirs += 1
-            else:
-                self.checked_files += 1
-        
-        # 선택 변경 시그널 발생
-        self.selection_changed_signal.emit(self.checked_files, self.checked_dirs)
-        
+        # 선택 변경 시그널 발생 (파일 수, 폴더 수, 체크된 아이템 Set 전체를 전달)
+        self.selection_changed_signal.emit(self.checked_files, self.checked_dirs, self.checked_items)
+    
     def clear_selection(self):
         """선택 항목 모두 해제"""
         if not self.checked_items:
@@ -522,7 +516,7 @@ class FileTreeController(QObject):
             self.checked_dirs = 0
             
             # 선택 변경 시그널 발생
-            self.selection_changed_signal.emit(self.checked_files, self.checked_dirs)
+            self.selection_changed_signal.emit(self.checked_files, self.checked_dirs, self.checked_items)
             
         finally:
             # 시그널 다시 연결
@@ -663,4 +657,22 @@ class FileTreeController(QObject):
         if self.current_folder:
             self.load_folder(str(self.current_folder))
             
+        return self.apply_gitignore_rules
+
+    def get_show_hidden(self):
+        """
+        숨김 파일 표시 상태 반환
+        
+        Returns:
+            bool: 숨김 파일 표시 상태
+        """
+        return self.show_hidden
+    
+    def get_apply_gitignore_rules(self):
+        """
+        .gitignore 필터링 적용 상태 반환
+        
+        Returns:
+            bool: .gitignore 필터링 적용 상태
+        """
         return self.apply_gitignore_rules 

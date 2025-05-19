@@ -221,7 +221,22 @@ class CustomTreeView(QTreeView):
     
     def mouseDoubleClickEvent(self, event):
         """더블 클릭 이벤트 처리"""
-        # 더블 클릭은 무시하고 이벤트 소비 (기본 확장/축소 방지)
+        # 더블 클릭한 아이템의 인덱스 가져오기
+        index = self.indexAt(event.pos())
+        
+        if index.isValid():
+            # 모델에서 해당 아이템이 디렉토리인지 확인
+            model = self.model()
+            if model:
+                item = model.itemFromIndex(index)
+                if item and item.data(Qt.UserRole):  # 디렉토리인 경우
+                    # 폴더 확장/축소 수동 처리
+                    if self.isExpanded(index):
+                        self.collapse(index)
+                    else:
+                        self.expand(index)
+        
+        # 이벤트 소비 (기본 처리 방지)
         event.accept()
     
     # QTreeView의 기본 클릭 처리 방지

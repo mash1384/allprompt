@@ -81,7 +81,7 @@ class TokenController(QObject):
     """
     # 시그널 정의
     token_progress_signal = Signal(int, int)  # current, total
-    total_tokens_updated_signal = Signal(str)  # formatted token count
+    total_tokens_updated_signal = Signal(str, int)  # formatted token count, files count
     token_calculation_status_signal = Signal(str, bool)  # message, is_error
     
     def __init__(self, parent=None):
@@ -94,31 +94,61 @@ class TokenController(QObject):
         self.total_tokens = 0  # Total token count for selected files
         self.token_thread = None  # Background calculation thread
     
-    def start_calculation(self, files: List[Path]):
+    def calculate_tokens(self, checked_items_set: set, files_count: int = None):
+        """
+        체크된 항목의 토큰 수를 계산합니다.
+        
+        Args:
+            checked_items_set: 체크된 항목 경로 Set
+            files_count: 체크된 파일 수 (None이면 자동 계산)
+        """
+        # 파일 목록만 필터링
+        files_to_calculate = [Path(path) for path in checked_items_set if Path(path).is_file()]
+        
+        # files_count가 제공되지 않으면 직접 계산
+        if files_count is None:
+            files_count = len(files_to_calculate)
+        
+        if files_to_calculate:
+            self.start_calculation(files_to_calculate, files_count)
+        else:
+            # 파일이 없으면 토큰 수 업데이트만 진행
+            self._update_token_count(checked_paths=None, files_count=files_count)
+    
+    def start_calculation(self, files: List[Path], files_count: int = None):
         """
         지정된 파일 목록의 토큰 수 계산 시작
         
         Args:
             files: 토큰 수를 계산할 파일 목록
+            files_count: 체크된 파일 수 (None이면 자동 계산)
         """
-        self._start_token_calculation(files)
+        self._start_token_calculation(files, files_count)
     
-    def _start_token_calculation(self, files: List[Path]):
+    def _start_token_calculation(self, files: List[Path], files_count: int = None):
         """
         지정된 파일 목록의 토큰 수 계산 시작 (내부 메소드)
         
         Args:
             files: 토큰 수를 계산할 파일 목록
+            files_count: 체크된 파일 수 (None이면 자동 계산)
         """
         # 이미 실행 중인 스레드가 있으면 중지
         if self.token_thread and self.token_thread.isRunning():
             self.token_thread.stop()
             self.token_thread.wait()
         
+        # files_count가 제공되지 않으면 직접 계산
+        if files_count is None:
+            files_count = len(files)
+        
         if not files:
             # 파일이 없으면 토큰 수 업데이트만 진행
-            self._update_token_count()
+            self._update_token_count(files_count=files_count)
             return
+        
+        # 클래스 변수에 파일 수 저장 (완료 시 사용)
+        self.current_files_count = files_count
         
         # 계산 시작 메시지
         self.token_calculation_status_signal.emit("토큰 계산을 시작합니다...", False)
@@ -167,7 +197,7 @@ class TokenController(QObject):
         self.token_calculation_status_signal.emit("토큰 계산 완료", False)
         
         # 토큰 수 업데이트 (UI 갱신)
-        self._update_token_count()
+        self._update_token_count(files_count=getattr(self, 'current_files_count', None))
         
         # 로그 기록
         logger.debug(f"Token calculation finished: {len(self.token_cache)} files calculated")
@@ -185,27 +215,41 @@ class TokenController(QObject):
         # 로그 기록
         logger.error(f"Token calculation error: {error_msg}")
     
-    def _update_token_count(self, checked_paths=None):
+    def _update_token_count(self, checked_paths=None, files_count=None):
         """
         선택된 파일들의 총 토큰 수 업데이트
         
         Args:
             checked_paths: 선택된 파일/폴더 경로 목록 (None인 경우 MainWindow에서 가져옴)
+            files_count: 선택된 파일 수 (None인 경우 자동 계산)
         """
         # 토큰 수 초기화
         self.total_tokens = 0
         
+        # 파일 수 기본값
+        if files_count is None:
+            files_count = 0
+        
         # 선택된 경로가 제공된 경우에만 계산
         if checked_paths:
+            # 파일 수 계산 필요한 경우
+            file_paths = []
+            
             for path in checked_paths:
                 path_str = str(path)
                 # 파일이고 캐시에 있으면 토큰 수 추가
-                if path.is_file() and path_str in self.token_cache:
-                    self.total_tokens += self.token_cache[path_str]
+                if path.is_file():
+                    file_paths.append(path)
+                    if path_str in self.token_cache:
+                        self.total_tokens += self.token_cache[path_str]
+            
+            # 파일 수가 제공되지 않았으면 계산
+            if files_count is None:
+                files_count = len(file_paths)
         
         # 토큰 수 포맷팅 및 시그널 발생
         formatted_tokens = f"{self.total_tokens:,}"
-        self.total_tokens_updated_signal.emit(formatted_tokens)
+        self.total_tokens_updated_signal.emit(formatted_tokens, files_count)
         
         return formatted_tokens
     
