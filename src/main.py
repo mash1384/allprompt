@@ -23,8 +23,8 @@ from src.gui.main_window import MainWindow
 from src.gui.resources import resources # Import compiled resources
 
 # Configure logging
-APP_NAME = "LLMPromptHelper"
-APP_AUTHOR = "LLMPromptHelper" # SettingsManager와 일관되게 (또는 원하는 이름으로)
+APP_NAME = "allprompt"
+APP_AUTHOR = "allprompt" # SettingsManager와 일관되게 (또는 원하는 이름으로)
 
 try:
     log_dir = Path(appdirs.user_log_dir(APP_NAME, APP_AUTHOR))
@@ -60,7 +60,7 @@ def main():
     logger.info("Application starting...") # 앱 시작 로그 추가
     try:
         app = QApplication(sys.argv)
-        app.setApplicationName("LLM Prompt Helper")
+        app.setApplicationName("allprompt")
 
         # --------------------------------------------------
         # Load and apply stylesheet

@@ -1,4 +1,4 @@
-# LLM 프롬프트 헬퍼
+# allprompt
 
 LLM 프롬프트용 코드 스니펫을 손쉽게 생성하는 데스크톱 애플리케이션입니다.
 
@@ -18,9 +18,9 @@ LLM 프롬프트용 코드 스니펫을 손쉽게 생성하는 데스크톱 애�
 
 ### 배포 버전 (일반 사용자)
 
-[GitHub Releases](https://github.com/yourusername/llm-prompt-helper/releases)에서 다운로드:
-- **macOS**: `LLM Prompt Helper.app.zip` 다운로드 후 압축 해제
-- **Windows**: `LLM Prompt Helper.exe` 인스톨러 실행
+[GitHub Releases](https://github.com/yourusername/allprompt/releases)에서 다운로드:
+- **macOS**: `allprompt.app.zip` 다운로드 후 압축 해제
+- **Windows**: `allprompt.exe` 인스톨러 실행
 
 > **참고**: macOS에서 처음 실행 시 "확인되지 않은 개발자" 경고가 표시될 수 있습니다. 시스템 환경설정 > 보안 및 개인 정보 보호에서 허용해주세요.
 
@@ -28,8 +28,8 @@ LLM 프롬프트용 코드 스니펫을 손쉽게 생성하는 데스크톱 애�
 
 ```bash
 # 1. 저장소 복제
-git clone https://github.com/yourusername/llm-prompt-helper.git
-cd llm-prompt-helper
+git clone https://github.com/yourusername/allprompt.git
+cd allprompt
 
 # 2. 가상 환경 생성 및 활성화
 python -m venv venv

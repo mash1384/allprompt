@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>LLM Prompt Helper</string>
+    <string>allprompt</string>
     <key>CFBundleIdentifier</key>
-    <string>com.llmPromptHelper.app</string>
+    <string>com.allprompt.app</string>
     <key>CFBundleVersion</key>
     <string>1.0.0</string>
     <key>CFBundlePackageType</key>
@@ -17,7 +17,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2024 LLM Prompt Helper</string>
+    <string>Copyright © 2024 allprompt</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>

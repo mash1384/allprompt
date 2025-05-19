@@ -557,7 +557,7 @@ class MainWindow(QMainWindow):
         """Initialize the main window"""
         super().__init__()
         
-        self.setWindowTitle("LLM Prompt Helper")
+        self.setWindowTitle("allprompt")
         
         # Initialize progress bar
         self.progress_bar = QProgressBar()
@@ -1103,7 +1103,7 @@ class MainWindow(QMainWindow):
         self._create_menu()
         
         # Window size and title
-        self.setWindowTitle("LLM Prompt Helper")
+        self.setWindowTitle("allprompt")
         self.resize(1200, 800)  # Initial window size
         
         # Window icon
@@ -1789,9 +1789,9 @@ class MainWindow(QMainWindow):
     def _show_about_dialog(self):
         """Show the about dialog"""
         about_text = f"""
-        <h2>LLM Prompt Helper</h2>
+        <h2>allprompt</h2>
         <p>Version 1.0.0</p>
-        <p>A tool to help prepare code snippets for LLM prompts.</p>
+        <p>A tool to help prepare code snippets for allprompt.</p>
         <p>©2023</p>
         <p>Using tokenizer: {self.tokenizer.model_name}</p>
         """
@@ -1868,7 +1868,7 @@ class MainWindow(QMainWindow):
                 return
             
             try:
-                temp_output_file_path = Path(appdirs.user_data_dir("LLMPromptHelper", "LLMPromptHelper")) / "clipboard_content_debug.txt"
+                temp_output_file_path = Path(appdirs.user_data_dir("allprompt", "allprompt")) / "clipboard_content_debug.txt"
                 temp_output_file_path.parent.mkdir(parents=True, exist_ok=True) # 디렉토리 생성
                 with open(temp_output_file_path, "w", encoding="utf-8") as f:
                     f.write(output)
