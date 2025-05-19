@@ -43,7 +43,7 @@ try:
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.addHandler(file_handler)
-    # root_logger.addHandler(stream_handler) # 필요에 따라 주석 해제 또는 유지
+    root_logger.addHandler(stream_handler) # 필요에 따라 주석 해제 또는 유지
 
     logger = logging.getLogger(__name__) # 현재 모듈 로거 가져오기
 
@@ -57,7 +57,9 @@ except Exception as e:
 
 def main():
     """Application main function"""
-    logger.info("Application starting...") # 앱 시작 로그 추가
+    logger.info("===== 애플리케이션 시작 =====")
+    logger.info(f"로그 파일: {log_file_path}")
+    logger.info(f"로그 수준: {logging.getLevelName(logging.getLogger().getEffectiveLevel())}")
     try:
         app = QApplication(sys.argv)
         app.setApplicationName("allprompt")
