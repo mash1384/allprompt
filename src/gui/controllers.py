@@ -17,6 +17,7 @@ from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon
 from src.core.file_scanner import scan_directory, is_binary_file
 from src.core.filter import GitignoreFilter
 from src.core.sort_utils import sort_items
+from src.gui.constants import ITEM_DATA_ROLE
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +216,13 @@ class FileTreeController(QObject):
                 root_item = QStandardItem(self.current_folder.name)
                 root_item.setIcon(self.folder_icon)
                 root_item.setCheckable(True)
-                root_item.setData(True, Qt.UserRole)  # 디렉토리 플래그 추가
+                # 메타데이터 설정
+                item_metadata = {
+                    'is_dir': True,
+                    'abs_path': str(self.current_folder),
+                    'rel_path': str(root_rel_path)
+                }
+                root_item.setData(item_metadata, ITEM_DATA_ROLE)  # 메타데이터 추가
                 item_dict[rel_path] = root_item
                 self.tree_model.appendRow(root_item)
                 break
@@ -225,7 +232,13 @@ class FileTreeController(QObject):
             root_item = QStandardItem(self.current_folder.name)
             root_item.setIcon(self.folder_icon)
             root_item.setCheckable(True)
-            root_item.setData(True, Qt.UserRole)  # 디렉토리 플래그 추가
+            # 메타데이터 설정
+            item_metadata = {
+                'is_dir': True,
+                'abs_path': str(self.current_folder),
+                'rel_path': str(root_rel_path)
+            }
+            root_item.setData(item_metadata, ITEM_DATA_ROLE)  # 메타데이터 추가
             item_dict[root_rel_path] = root_item
             self.tree_model.appendRow(root_item)
         
@@ -241,39 +254,9 @@ class FileTreeController(QObject):
             
             path = info.get('path')
             is_dir = info.get('is_dir')
-            is_symlink = info.get('is_symlink')
-            is_hidden = info.get('is_hidden')
-            error = info.get('error')
             
-            # 상대 경로의 부모 경로 구하기
-            parent_path = rel_path.parent
-            
-            # 부모 아이템 찾기
-            parent_item = item_dict.get(parent_path)
-            if not parent_item:
-                # 필요한 부모 경로가 없는 경우 (필터링 등으로 인해),
-                # 중간 경로를 생성해야 함
-                current_parent_path = Path('.')
-                current_parent_item = root_item
-                
-                # 부모 경로 분해
-                path_parts = list(parent_path.parts)
-                
-                for part in path_parts:
-                    current_parent_path = current_parent_path / part
-                    if current_parent_path in item_dict:
-                        current_parent_item = item_dict[current_parent_path]
-                    else:
-                        # 중간 경로 노드 생성
-                        new_parent_item = QStandardItem(part)
-                        new_parent_item.setIcon(self.folder_icon)
-                        new_parent_item.setCheckable(True)
-                        new_parent_item.setData(True, Qt.UserRole)  # 디렉토리 플래그 추가
-                        current_parent_item.appendRow(new_parent_item)
-                        item_dict[current_parent_path] = new_parent_item
-                        current_parent_item = new_parent_item
-                
-                parent_item = current_parent_item
+            # 부모 아이템 찾기 또는 필요시 생성
+            parent_item = self._ensure_parent_item(rel_path, root_item, item_dict)
             
             # 현재 아이템 이름
             name = path.name
@@ -283,19 +266,17 @@ class FileTreeController(QObject):
             item.setCheckable(True)
             
             # 아이콘 설정
-            if is_dir:
-                item.setIcon(self.folder_icon)
-                item.setData(True, Qt.UserRole)  # 디렉토리 플래그
-            else:
-                # 파일 확장자에 따라 아이콘 결정
-                ext = path.suffix.lower()
-                if ext in ['.py', '.js', '.ts', '.jsx', '.tsx', '.c', '.cpp', '.h', '.java', '.cs', '.php', '.rb', '.go', '.rs']:
-                    item.setIcon(self.code_file_icon)
-                elif ext in ['.txt', '.md', '.json', '.yaml', '.yml', '.xml', '.html', '.css', '.scss', '.sass', '.doc', '.docx', '.pdf']:
-                    item.setIcon(self.doc_file_icon)
-                else:
-                    item.setIcon(self.file_icon)
-                item.setData(False, Qt.UserRole)  # 디렉토리가 아님을 표시
+            item.setIcon(self._get_item_icon(info))
+            
+            # 메타데이터 설정
+            item_metadata = {
+                'is_dir': is_dir,
+                'abs_path': str(path),
+                'rel_path': str(rel_path),
+                'error': info.get('error', False),
+                'is_symlink': info.get('is_symlink', False)
+            }
+            item.setData(item_metadata, ITEM_DATA_ROLE)
             
             # 아이템을 부모에 추가
             parent_item.appendRow(item)
@@ -448,41 +429,57 @@ class FileTreeController(QObject):
     
     def _get_item_path(self, item):
         """
-        트리 아이템의 전체 경로 반환
+        아이템의 경로를 반환
         
         Args:
-            item: 트리 아이템
+            item: 경로를 찾을 아이템
             
         Returns:
             Path 객체 또는 None
         """
-        if not self.current_folder:
+        if not item or not self.current_folder:
             return None
-            
-        # 아이템 경로 구성
-        path_parts = []
+        
+        # 메타데이터에서 경로 정보 가져오기
+        metadata = item.data(ITEM_DATA_ROLE)
+        if isinstance(metadata, dict) and 'abs_path' in metadata:
+            return Path(metadata['abs_path'])
+        
+        # 아이템 모델 인덱스 가져오기
+        index = item.index()
+        if not index.isValid():
+            return None
+        
+        # 텍스트 기반 경로 구성 (기존 방식)
+        path_components = []
         
         # 현재 아이템 이름
-        path_parts.append(item.text())
+        text = item.text()
+        if not text:
+            return None
         
-        # 부모 아이템 경로 추가
+        path_components.append(text)
+        
+        # 부모 항목들 따라가기
         parent = item.parent()
         while parent:
-            path_parts.append(parent.text())
+            parent_text = parent.text()
+            # 루트 아이템이면 멈춤 (이미 현재 폴더명이므로)
+            if not parent.parent():  
+                break
+            path_components.append(parent_text)
             parent = parent.parent()
         
-        # 역순으로 경로 구성 (루트->리프)
-        path_parts.reverse()
+        # 역순으로 경로 구성 (자식→부모 순서로 모았으므로)
+        path_components.reverse()
         
-        # 첫 번째 항목이 루트 폴더 이름이면 제외
-        if path_parts and path_parts[0] == self.current_folder.name:
-            path_parts = path_parts[1:]
+        # 상대 경로 구성
+        rel_path = Path(*path_components)
         
-        # 상대 경로 생성
-        rel_path = Path(*path_parts)
+        # 절대 경로로 변환
+        abs_path = self.current_folder / rel_path
         
-        # 절대 경로 반환
-        return self.current_folder / rel_path
+        return abs_path
     
     def _update_check_stats(self):
         """체크 상태 통계 업데이트 및 시그널 발생"""
@@ -675,4 +672,98 @@ class FileTreeController(QObject):
         Returns:
             bool: .gitignore 필터링 적용 상태
         """
-        return self.apply_gitignore_rules 
+        return self.apply_gitignore_rules
+
+    def _get_item_icon(self, item_info: Dict[str, Any]) -> QIcon:
+        """
+        파일 정보에 기반하여 적절한 아이콘 반환
+        
+        Args:
+            item_info: 아이템 정보 딕셔너리
+        
+        Returns:
+            QIcon: 항목에 적합한 아이콘
+        """
+        # 디렉토리인 경우
+        if item_info.get('is_dir', False):
+            return self.folder_icon
+            
+        # 에러가 있는 경우
+        if item_info.get('error'):
+            return self.error_icon
+            
+        # 심볼릭 링크인 경우
+        if item_info.get('is_symlink', False):
+            return self.symlink_icon
+            
+        # 파일인 경우 확장자에 따라 아이콘 결정
+        path = item_info.get('path')
+        if path:
+            ext = path.suffix.lower()
+            
+            # 코드 파일
+            if ext in ['.py', '.js', '.ts', '.jsx', '.tsx', '.c', '.cpp', '.h', '.java', '.cs', '.php', '.rb', '.go', '.rs']:
+                return self.code_file_icon
+                
+            # 문서 파일
+            elif ext in ['.txt', '.md', '.json', '.yaml', '.yml', '.xml', '.html', '.css', '.scss', '.sass', '.doc', '.docx', '.pdf']:
+                return self.doc_file_icon
+                
+            # 이미지 파일
+            elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.webp']:
+                return self.image_file_icon
+        
+        # 기본 파일 아이콘
+        return self.file_icon
+    
+    def _ensure_parent_item(self, rel_path: Path, root_item: QStandardItem, item_dict: Dict[Path, QStandardItem]) -> QStandardItem:
+        """
+        경로의 부모 아이템을 찾거나 필요시 생성
+        
+        Args:
+            rel_path: 찾을 항목의 상대 경로
+            root_item: 루트 아이템
+            item_dict: 경로-아이템 매핑 딕셔너리
+        
+        Returns:
+            QStandardItem: 찾았거나 새로 생성한 부모 아이템
+        """
+        parent_path = rel_path.parent
+        
+        # 부모 경로가 이미 존재하는 경우 바로 반환
+        parent_item = item_dict.get(parent_path)
+        if parent_item:
+            return parent_item
+            
+        # 루트인 경우 루트 아이템 반환
+        if parent_path == Path('.') or not parent_path.parts:
+            return root_item
+            
+        # 중간 부모 경로 생성 필요
+        current_parent_path = Path('.')
+        current_parent_item = root_item
+        
+        # 부모 경로 분해 및 필요한 중간 노드 생성
+        path_parts = list(parent_path.parts)
+        
+        for part in path_parts:
+            current_parent_path = current_parent_path / part
+            if current_parent_path in item_dict:
+                current_parent_item = item_dict[current_parent_path]
+            else:
+                # 중간 경로 노드 생성
+                new_parent_item = QStandardItem(part)
+                new_parent_item.setIcon(self.folder_icon)
+                new_parent_item.setCheckable(True)
+                # 메타데이터 설정
+                item_metadata = {
+                    'is_dir': True,
+                    'abs_path': str(current_parent_path),
+                    'rel_path': str(current_parent_path)
+                }
+                new_parent_item.setData(item_metadata, ITEM_DATA_ROLE)  # 메타데이터 추가
+                current_parent_item.appendRow(new_parent_item)
+                item_dict[current_parent_path] = new_parent_item
+                current_parent_item = new_parent_item
+        
+        return current_parent_item 

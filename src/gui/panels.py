@@ -7,14 +7,19 @@ UI 패널 위젯 모듈
 """
 
 import logging
+import os
+from pathlib import Path
+from typing import Optional, Set, Dict, Any
+
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer
+from PySide6.QtGui import QStandardItemModel, QFont, QIcon
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSizePolicy, QTreeView, QStyle, QApplication
 )
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QIcon, QStandardItemModel
 
 from .custom_widgets import CustomTreeView, CheckableItemDelegate
+from src.gui.constants import ITEM_DATA_ROLE
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +131,8 @@ class LeftPanelWidget(QWidget):
             return
             
         item = self.tree_model.itemFromIndex(index)
-        if item and item.data(Qt.UserRole) is True:  # 디렉토리 항목인 경우만
+        metadata = item.data(ITEM_DATA_ROLE) if item else None
+        if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리 항목인 경우만
             # 아이콘 타입에 따라 내부에 저장된 아이콘 사용
             if icon_type == 'folder_open':
                 item.setIcon(self.folder_open_icon)

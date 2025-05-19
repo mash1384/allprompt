@@ -17,51 +17,9 @@ from .file_scanner import read_text_file
 # 만약 이 파일이 다른 위치에서 실행되거나 import 구조가 다르다면,
 # from src.core.file_scanner import read_text_file 와 같이 프로젝트 루트 기준 경로 사용
 
-logger = logging.getLogger(__name__)
+from src.core.constants import EXTENSION_TO_LANGUAGE_MAP
 
-# 파일 확장자에 따른 언어 식별자 매핑 (원본과 동일)
-EXTENSION_TO_LANGUAGE = {
-    ".py": "python",
-    ".js": "javascript",
-    ".jsx": "jsx",
-    ".ts": "typescript",
-    ".tsx": "tsx",
-    ".html": "html",
-    ".css": "css",
-    ".scss": "scss",
-    ".sass": "sass",
-    ".json": "json",
-    ".md": "markdown",
-    ".txt": "text",
-    ".sh": "bash",
-    ".bash": "bash",
-    ".zsh": "bash",
-    ".c": "c",
-    ".cpp": "cpp",
-    ".cs": "csharp",
-    ".java": "java",
-    ".rb": "ruby",
-    ".go": "go",
-    ".rs": "rust",
-    ".php": "php",
-    ".swift": "swift",
-    ".kt": "kotlin",
-    ".kts": "kotlin",
-    ".xml": "xml",
-    ".yaml": "yaml",
-    ".yml": "yaml",
-    ".toml": "toml",
-    ".ini": "ini",
-    ".cfg": "ini",
-    ".conf": "ini",
-    ".sql": "sql",
-    ".r": "r",
-    ".dart": "dart",
-    ".lua": "lua",
-    ".pl": "perl",
-    ".pm": "perl",
-    ".hs": "haskell",
-}
+logger = logging.getLogger(__name__)
 
 def generate_file_map(
     items: List[Dict[str, Any]],
@@ -216,7 +174,7 @@ def generate_file_contents(
         display_relative_path_str = str(display_relative_path).replace(os.sep, '/') # OS 독립적 경로
 
         file_extension = file_abs_path.suffix.lower()
-        language_tag = EXTENSION_TO_LANGUAGE.get(file_extension, "text") # 기본값 "text"
+        language_tag = EXTENSION_TO_LANGUAGE_MAP.get(file_extension, "text") # 기본값 "text"
 
         # 파일 내용 읽기
         read_result = read_text_file(file_abs_path)

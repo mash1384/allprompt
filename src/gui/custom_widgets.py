@@ -6,13 +6,19 @@
 애플리케이션에서 사용되는 재사용 가능한 커스텀 위젯 컴포넌트를 정의합니다.
 """
 
-from typing import Optional
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+
 from PySide6.QtWidgets import (
     QTreeView, QStyledItemDelegate, QStyleOptionViewItem, QStyle, 
     QApplication, QProxyStyle
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex, QEvent, QRect
-from PySide6.QtGui import QPainter, QCursor
+from PySide6.QtCore import Qt, Signal, QModelIndex, QEvent, QRect, QPoint
+from PySide6.QtGui import QPainter, QCursor, QStandardItemModel, QStandardItem
+
+from src.gui.constants import ITEM_DATA_ROLE
+
+logger = logging.getLogger(__name__)
 
 class CheckableItemDelegate(QStyledItemDelegate):
     """
@@ -163,7 +169,8 @@ class CustomTreeView(QTreeView):
             model = self.model()
             if model:
                 item = model.itemFromIndex(index)
-                if item and item.data(Qt.UserRole):  # 디렉토리인 경우
+                metadata = item.data(ITEM_DATA_ROLE) if item else None
+                if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
                     # 폴더 확장/축소 수동 처리
                     if self.isExpanded(index):
                         self.collapse(index)
@@ -171,8 +178,10 @@ class CustomTreeView(QTreeView):
                         self.expand(index)
                     # 이벤트 소비
                     event.accept()
-                    return
-            
+                elif item and (not isinstance(metadata, dict) or not metadata.get('is_dir', False)):  # 파일인 경우만
+                    # 일반 아이템 영역 클릭 시그널 발생 (파일만)
+                    self.item_clicked.emit(index)
+        
         # 체크박스 클릭 진행 중이었는지 확인
         if self._checkbox_click_in_progress:
             # 체크박스 클릭 영역에서 마우스를 놓았는지 확인
@@ -204,7 +213,8 @@ class CustomTreeView(QTreeView):
                 model = self.model()
                 if model:
                     item = model.itemFromIndex(index)
-                    if item and item.data(Qt.UserRole):  # 디렉토리인 경우
+                    metadata = item.data(ITEM_DATA_ROLE) if item else None
+                    if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
                         # 폴더 확장/축소 수동 처리
                         if self.isExpanded(index):
                             self.collapse(index)
@@ -212,7 +222,7 @@ class CustomTreeView(QTreeView):
                             self.expand(index)
                         # 이벤트 소비
                         event.accept()
-                    elif not (item and item.data(Qt.UserRole)):  # 파일인 경우만
+                    elif item and (not isinstance(metadata, dict) or not metadata.get('is_dir', False)):  # 파일인 경우만
                         # 일반 아이템 영역 클릭 시그널 발생 (파일만)
                         self.item_clicked.emit(index)
                         
@@ -229,7 +239,8 @@ class CustomTreeView(QTreeView):
             model = self.model()
             if model:
                 item = model.itemFromIndex(index)
-                if item and item.data(Qt.UserRole):  # 디렉토리인 경우
+                metadata = item.data(ITEM_DATA_ROLE) if item else None
+                if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
                     # 폴더 확장/축소 수동 처리
                     if self.isExpanded(index):
                         self.collapse(index)
@@ -252,7 +263,8 @@ class CustomTreeView(QTreeView):
             model = self.model()
             if model:
                 item = model.itemFromIndex(current_index)
-                is_directory = item and item.data(Qt.UserRole)
+                metadata = item.data(ITEM_DATA_ROLE) if item else None
+                is_directory = item and isinstance(metadata, dict) and metadata.get('is_dir', False)
                 
                 if key in (Qt.Key_Right, Qt.Key_Enter, Qt.Key_Return):
                     # 폴더인 경우에만 확장 처리
@@ -279,112 +291,135 @@ class CustomTreeView(QTreeView):
     
     def _is_checkbox_area(self, index, pos):
         """
-        지정된 위치가 체크박스 영역인지 확인
+        주어진 위치(pos)가 해당 아이템(index)의 체크박스 영역 내에 있는지 확인하는 메소드
         
         Args:
-            index: 항목 인덱스
-            pos: 마우스 위치
+            index: 트리 아이템의 모델 인덱스
+            pos: 확인할 마우스 커서 위치(QPoint)
             
         Returns:
-            체크박스 영역이면 True, 아니면 False
+            boolean: 마우스 위치가 체크박스 영역 내에 있으면 True, 그렇지 않으면 False
         """
+        # 모델이 없으면 체크박스도 없음
         model = self.model()
         if not model:
             return False
             
-        # 체크 역할 데이터가 있는지 확인
+        # 해당 인덱스에 체크 상태가 정의되어 있는지 확인
+        # (체크 상태가 없으면 체크박스가 표시되지 않음)
         if not model.data(index, Qt.CheckStateRole):
             return False
             
-        # 항목 시각적 영역
-        item_rect = self.visualRect(index)
+        # 현재 아이템의 시각적 영역 가져오기
+        item_visual_rect = self.visualRect(index)
         
-        # QStyleOptionViewItem 설정
-        option = QStyleOptionViewItem()
-        option.initFrom(self)
-        option.rect = item_rect
+        # QStyleOptionViewItem 설정 - Qt 스타일링 시스템에서 사용
+        style_option = QStyleOptionViewItem()
+        style_option.initFrom(self)  # 현재 위젯에서 스타일 옵션 초기화
+        style_option.rect = item_visual_rect  # 아이템의 시각적 영역 설정
         
-        # 아이템 상태 설정
+        # 아이템의 활성화 상태 및 포커스 상태 설정
         if self.isEnabled():
-            option.state |= QStyle.State_Enabled
+            style_option.state |= QStyle.State_Enabled  # 위젯이 활성화 상태인 경우
         if self.currentIndex() == index:
-            option.state |= QStyle.State_HasFocus
+            style_option.state |= QStyle.State_HasFocus  # 현재 아이템에 포커스가 있는 경우
         
-        # 체크 상태 설정
-        check_state = model.data(index, Qt.CheckStateRole)
-        if check_state == Qt.Checked:
-            option.state |= QStyle.State_On
-        elif check_state == Qt.PartiallyChecked:
-            option.state |= QStyle.State_NoChange
+        # 체크박스의 상태 설정 (체크됨, 부분 체크, 체크 안됨)
+        current_check_state = model.data(index, Qt.CheckStateRole)
+        if current_check_state == Qt.Checked:
+            style_option.state |= QStyle.State_On  # 체크됨
+        elif current_check_state == Qt.PartiallyChecked:
+            style_option.state |= QStyle.State_NoChange  # 부분 체크
         else:
-            option.state |= QStyle.State_Off
+            style_option.state |= QStyle.State_Off  # 체크 안됨
         
-        # 체크박스 특성 설정
-        option.features |= QStyleOptionViewItem.HasCheckIndicator
+        # 아이템의 특성 설정 (체크박스, 아이콘, 텍스트 등)
+        # 체크박스 표시 특성 설정
+        style_option.features |= QStyleOptionViewItem.HasCheckIndicator
         
-        # 데코레이션 특성 설정
+        # 아이콘 표시 특성 설정 (있는 경우만)
         if model.data(index, Qt.DecorationRole):
-            option.features |= QStyleOptionViewItem.HasDecoration
+            style_option.features |= QStyleOptionViewItem.HasDecoration
         
-        # 표시 특성 설정
+        # 텍스트 표시 특성 설정 (있는 경우만)
         if model.data(index, Qt.DisplayRole):
-            option.features |= QStyleOptionViewItem.HasDisplay
+            style_option.features |= QStyleOptionViewItem.HasDisplay
         
-        # 스타일 가져오기
-        style = self.style()
+        # 현재 스타일 엔진 가져오기
+        current_style = self.style()
         
-        # 체크박스 영역 계산
-        check_rect = style.subElementRect(QStyle.SE_ItemViewItemCheckIndicator, option, self)
+        # 체크박스 영역 계산 - Qt 스타일 시스템을 통해 계산됨
+        checkbox_rect = current_style.subElementRect(QStyle.SE_ItemViewItemCheckIndicator, style_option, self)
         
-        # 유효하지 않은 체크박스 영역인 경우 대체 계산
-        if check_rect.width() <= 0 or check_rect.height() <= 0:
-            # 기본 지표 값 사용
-            indicator_width = style.pixelMetric(QStyle.PM_IndicatorWidth, option, self)
-            indicator_height = style.pixelMetric(QStyle.PM_IndicatorHeight, option, self)
+        # Qt 스타일 시스템이 유효한 체크박스 영역을 반환하지 않은 경우 
+        # (일부 스타일이나 플랫폼에서 발생할 수 있음)
+        if checkbox_rect.width() <= 0 or checkbox_rect.height() <= 0:
+            # 대체 계산 로직: 기본 체크박스 크기와 위치를 수동으로 계산
             
-            # 체크박스 X 위치는 항목 시작 부분 + 약간의 여백
-            check_x = item_rect.x() + style.pixelMetric(QStyle.PM_LayoutLeftMargin)
+            # 체크박스 크기 가져오기 (픽셀 지표를 통해)
+            checkbox_width = current_style.pixelMetric(QStyle.PM_IndicatorWidth, style_option, self)
+            checkbox_height = current_style.pixelMetric(QStyle.PM_IndicatorHeight, style_option, self)
             
-            # 체크박스 Y 위치는 항목 중앙에 맞춤
-            check_y = item_rect.y() + (item_rect.height() - indicator_height) // 2
+            # 왼쪽 여백 가져오기
+            left_margin = current_style.pixelMetric(QStyle.PM_LayoutLeftMargin)
+            
+            # 체크박스 X 위치: 아이템 시작 위치 + 왼쪽 여백
+            checkbox_x = item_visual_rect.x() + left_margin
+            
+            # 체크박스 Y 위치: 아이템 중앙에 수직 정렬
+            checkbox_y = item_visual_rect.y() + (item_visual_rect.height() - checkbox_height) // 2
             
             # 체크박스 영역 생성
-            check_rect = QRect(check_x, check_y, indicator_width, indicator_height)
+            checkbox_rect = QRect(checkbox_x, checkbox_y, checkbox_width, checkbox_height)
             
-            # 체크박스 영역 좀 더 확장 (클릭 감지 향상)
-            check_rect.adjust(-2, -2, 2, 2)
+            # 사용자 클릭의 정확도를 높이기 위해 체크박스 영역을 약간 확장
+            # (작은 체크박스를 클릭하기 어려울 수 있으므로)
+            checkbox_rect.adjust(-2, -2, 2, 2)  # 좌, 상, 우, 하 방향으로 각각 2픽셀 확장
         
-        # 마우스 위치가 체크박스 영역 내에 있는지 확인
-        return check_rect.contains(pos)
+        # 마우스 위치가 체크박스 영역 내에 있는지 확인하여 결과 반환
+        return checkbox_rect.contains(pos)
     
     def _is_branch_indicator_area(self, index, pos):
         """
-        지정된 위치가 브랜치 인디케이터(폴더 확장/축소 아이콘) 영역인지 확인
+        주어진 위치(pos)가 해당 아이템(index)의 브랜치 인디케이터(폴더 확장/축소 아이콘) 영역 내에 있는지 확인하는 메소드
+        
+        이 메소드는 트리 뷰에서 폴더 아이템 앞에 표시되는 [+]/[-] 확장/축소 아이콘 영역을 식별합니다.
         
         Args:
-            index: 항목 인덱스
-            pos: 마우스 위치
+            index: 트리 아이템의 모델 인덱스
+            pos: 확인할 마우스 커서 위치(QPoint)
             
         Returns:
-            브랜치 인디케이터 영역이면 True, 아니면 False
+            boolean: 마우스 위치가 브랜치 인디케이터 영역 내에 있으면 True, 그렇지 않으면 False
         """
-        # 항목 시각적 영역
-        rect = self.visualRect(index)
+        # 현재 아이템의 시각적 영역 가져오기
+        item_visual_rect = self.visualRect(index)
         
-        # 브랜치 인디케이터 위치는 항목 앞쪽에 있음
-        left_margin = self.indentation()
+        # 들여쓰기 크기 가져오기 (각 트리 레벨의 들여쓰기 픽셀 단위)
+        indentation_width = self.indentation()
         
-        # 항목의 깊이
-        depth = 0
-        parent = index.parent()
-        while parent.isValid():
-            depth += 1
-            parent = parent.parent()
+        # 현재 아이템의 트리 깊이(레벨) 계산
+        # 루트 레벨은 0, 그 아래 각 레벨은 1씩 증가
+        tree_depth = 0
+        parent_index = index.parent()
+        while parent_index.isValid():
+            tree_depth += 1
+            parent_index = parent_index.parent()
         
-        # 항목 들여쓰기까지의 영역이 브랜치 인디케이터 영역
-        branch_rect_width = depth * left_margin
-        branch_rect = QRect(rect.x() - branch_rect_width, rect.y(), 
-                          branch_rect_width, rect.height())
+        # 브랜치 인디케이터 영역 계산
+        # 브랜치 인디케이터는 아이템 텍스트 왼쪽의 들여쓰기 영역에 위치
+        # 전체 들여쓰기 영역의 너비는 (트리 깊이 * 들여쓰기 크기)
+        branch_area_width = tree_depth * indentation_width
         
-        # 마우스 위치가 브랜치 인디케이터 영역 내에 있는지 확인
-        return branch_rect.contains(pos) 
+        # 브랜치 인디케이터 영역 생성
+        # X 좌표는 아이템의 시각적 시작점에서 들여쓰기 영역만큼 왼쪽으로 이동
+        # 높이는 아이템 전체 높이와 동일
+        branch_indicator_rect = QRect(
+            item_visual_rect.x() - branch_area_width,  # 시작 X 좌표
+            item_visual_rect.y(),                      # 시작 Y 좌표
+            branch_area_width,                         # 너비
+            item_visual_rect.height()                  # 높이
+        )
+        
+        # 마우스 위치가 브랜치 인디케이터 영역 내에 있는지 확인하여 결과 반환
+        return branch_indicator_rect.contains(pos) 
