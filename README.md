@@ -73,3 +73,6 @@ LLM(대규모 언어 모델) 프롬프트에 사용할 코드 스니펫을 쉽�
 ## 라이선스
 
 [MIT 라이선스](LICENSE) 
+
+cd /Users/minjihun/allprompt/dist/"LLM Prompt Helper.app"/Contents/MacOS/
+./"LLM Prompt Helper"

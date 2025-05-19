@@ -9,6 +9,7 @@
 import logging
 import os
 from pathlib import Path
+import appdirs
 from typing import Optional, List, Dict, Any, Set, Union, Tuple
 import threading
 from queue import Queue
@@ -1800,60 +1801,107 @@ class MainWindow(QMainWindow):
     def _copy_to_clipboard(self):
         """Copy selected files to clipboard in formatted output"""
         try:
-            # Get all checked files
-            files = []
-            for path_str in sorted(self.checked_items):
-                path = Path(path_str)
-                # Only include files, not directories
-                if not path.is_dir():
-                    files.append(path)
-            
-            if not files:
-                self.statusBar().showMessage("No files selected to copy", 5000)
+            # 현재 폴더와 선택 항목 확인
+            if not self.current_folder:
+                self.statusBar().showMessage("No folder selected", 5000)
+                return
+                
+            if not self.checked_items:
+                self.statusBar().showMessage("No items selected to copy", 5000)
                 return
             
-            total_files = len(files)
+            # 선택된 아이템 정보를 저장할 리스트 생성
+            selected_items_details = []
+            
+            # 선택된 모든 항목에 대해 처리 (일관된 정렬 순서 보장)
+            for path_str in sorted(list(self.checked_items)):
+                path_obj = Path(path_str)
+                
+                # 상대 경로 계산
+                try:
+                    rel_path = path_obj.relative_to(self.current_folder)
+                except ValueError:
+                    # 현재 폴더의 하위 경로가 아닌 경우 파일/폴더 이름만 사용
+                    rel_path = Path(path_obj.name)
+                
+                # 아이템 정보 딕셔너리 생성
+                item_info = {
+                    'path': path_obj,
+                    'rel_path': rel_path,
+                    'is_dir': path_obj.is_dir()
+                }
+                
+                # 리스트에 추가
+                selected_items_details.append(item_info)
+            
+            # 선택된 파일 개수 계산 (디렉토리 제외)
+            total_files = sum(1 for item in selected_items_details if not item['is_dir'])
+            
+            if total_files == 0:
+                self.statusBar().showMessage("No files selected to copy, only directories", 5000)
+                return
+            
             self.statusBar().showMessage(f"Preparing {total_files} files for clipboard...", 0)
             
-            # Update progress bar
+            # 프로그레스 바 업데이트
             self.progress_bar.setRange(0, total_files)
             self.progress_bar.setValue(0)
             self.progress_bar.setVisible(True)
             
-            # Reset token count if needed
+            # 토큰 카운트 업데이트 (필요한 경우)
             if self.total_tokens <= 0:
                 self._update_token_count()
             
-            # Generate formatted output
+            # 포맷된 출력 생성
             output = generate_full_output(
-                self.current_folder, 
-                [str(f) for f in files],
-                self.file_cache
+                self.current_folder,
+                selected_items_details,
+                None,  # file_cache 인자는 None으로 전달
+                2      # indent_size는 2로 고정
             )
             
-            # Copy to clipboard
+            # 생성된 콘텐츠가 비어있는지 확인
+            if not output:
+                self.statusBar().showMessage("Generated content is empty. Nothing to copy.", 5000)
+                logger.warning("Generated content is empty. Nothing to copy.")
+                self.progress_bar.setVisible(False)
+                return
+            
+            try:
+                temp_output_file_path = Path(appdirs.user_data_dir("LLMPromptHelper", "LLMPromptHelper")) / "clipboard_content_debug.txt"
+                temp_output_file_path.parent.mkdir(parents=True, exist_ok=True) # 디렉토리 생성
+                with open(temp_output_file_path, "w", encoding="utf-8") as f:
+                    f.write(output)
+                logger.info(f"Debug: Output content saved to {temp_output_file_path}")
+            except Exception as e_file_save:
+                logger.error(f"Debug: Failed to save output content to file: {e_file_save}")
+            
             if copy_to_clipboard(output):
-                # Success message
+                # 성공 메시지
                 self.statusBar().showMessage(
                     f"Copied {total_files} files ({self.total_tokens} tokens) to clipboard", 
                     5000
                 )
                 logger.info(f"Copied {total_files} files ({self.total_tokens} tokens) to clipboard")
             else:
-                # Failed message
+                # 실패 메시지
                 self.statusBar().showMessage("Clipboard copy failed", 5000)
                 logger.error("Clipboard copy failed")
                 
         except Exception as e:
             logger.error(f"Error copying to clipboard: {e}", exc_info=True)
             self.statusBar().showMessage(f"Error occurred during copy: {str(e)}", 5000)
-            # Show error message box
+            
+            # 오류 메시지 박스 표시
             error_box = QMessageBox(self)
             error_box.setObjectName("critical")
             error_box.setWindowTitle("Copy Error")
             error_box.setText(f"An error occurred while copying to clipboard.\n\n{str(e)}")
             error_box.setIcon(QMessageBox.Critical)
             error_box.exec()
+        finally:
+            # 프로그레스 바 숨기기
+            self.progress_bar.setVisible(False)
     
     def _toggle_hidden_files(self):
         """Toggle display of hidden files/folders"""
