@@ -30,6 +30,7 @@ ENV/
 .vscode/
 *.swp
 *.swo
+.cursor/
 
 # 로그 및 임시 파일
 *.log
@@ -47,4 +48,13 @@ app.log
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-$RECYCLE.BIN/ 
+$RECYCLE.BIN/
+
+# 패키징 및 빌드 관련
+*.spec
+build/
+dist/
+memory-bank/
+
+# 앱 관련 특정 파일
+*.entitlements 
