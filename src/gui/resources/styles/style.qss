@@ -137,7 +137,7 @@ QMenu::indicator {
 QPushButton {
     background-color: rgba(40, 40, 40, 0.55);
     color: #D0D0D0;
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     border-radius: 8px;
     padding: 6px 12px;
     min-width: 80px;
@@ -150,13 +150,13 @@ QPushButton {
 
 QPushButton:hover {
     background-color: rgba(52, 52, 52, 0.65);
-    border: 1px solid rgba(180, 180, 180, 0.35);
+    border: 0.5px solid #444444;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
 }
 
 QPushButton:pressed {
     background-color: rgba(30, 30, 30, 0.7);
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     padding-top: 7px;
     padding-left: 13px;
     padding-bottom: 5px;
@@ -166,13 +166,13 @@ QPushButton:pressed {
 
 QPushButton:focus {
     outline: none;
-    border: 1px solid rgba(180, 180, 180, 0.4);
+    border: 0.5px solid #444444;
 }
 
 QPushButton:disabled {
     background-color: rgba(37, 37, 38, 0.4);
     color: rgba(93, 93, 93, 0.7);
-    border: 1px solid rgba(180, 180, 180, 0.15);
+    border: 0.5px solid #444444;
     box-shadow: none;
 }
 
@@ -183,7 +183,7 @@ QPushButton#clearButton,
 QPushButton#settingsButton {
     background-color: rgba(30, 30, 30, 0.55); 
     color: #FFFFFF;
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     border-radius: 8px;
     padding: 6px 12px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -204,7 +204,7 @@ QPushButton#copyButton:hover,
 QPushButton#clearButton:hover,
 QPushButton#settingsButton:hover {
     background-color: rgba(60, 60, 60, 0.65);
-    border: 1px solid rgba(180, 180, 180, 0.35);
+    border: 0.5px solid #444444;
     transition: background-color 0.2s, border-color 0.2s;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
@@ -214,7 +214,7 @@ QPushButton#copyButton:pressed,
 QPushButton#clearButton:pressed,
 QPushButton#settingsButton:pressed {
     background-color: rgba(25, 25, 25, 0.7);
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     padding-top: 7px;
     padding-left: 13px;
     padding-bottom: 5px;
@@ -228,7 +228,7 @@ QPushButton#clearButton:disabled,
 QPushButton#settingsButton:disabled {
     background-color: rgba(30, 30, 30, 0.35);
     color: rgba(180, 180, 180, 0.45);
-    border: 1px solid rgba(180, 180, 180, 0.15);
+    border: 0.5px solid #444444;
     box-shadow: none;
 }
 
@@ -289,7 +289,7 @@ QPushButton#settingsButton {
 /* 세컨더리 버튼 */
 QPushButton[secondary="true"] {
     background-color: rgba(30, 30, 30, 0.5);
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     border-radius: 8px;
     font-weight: normal;
     padding: 6px 12px;
@@ -300,13 +300,13 @@ QPushButton[secondary="true"] {
 
 QPushButton[secondary="true"]:hover {
     background-color: rgba(42, 42, 42, 0.6);
-    border: 1px solid rgba(180, 180, 180, 0.35);
+    border: 0.5px solid #444444;
     box-shadow: 0 3px 7px rgba(0, 0, 0, 0.22);
 }
 
 QPushButton[secondary="true"]:pressed {
     background-color: rgba(25, 25, 25, 0.65);
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
@@ -314,7 +314,7 @@ QPushButton[secondary="true"]:pressed {
 QPushButton[warning="true"] {
     background-color: rgba(244, 71, 71, 0.6);
     color: #FFFFFF;
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     border-radius: 8px;
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
@@ -323,13 +323,13 @@ QPushButton[warning="true"] {
 
 QPushButton[warning="true"]:hover {
     background-color: rgba(255, 82, 82, 0.7);
-    border: 1px solid rgba(180, 180, 180, 0.35);
+    border: 0.5px solid #444444;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
 }
 
 QPushButton[warning="true"]:pressed {
     background-color: rgba(228, 53, 53, 0.75);
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
@@ -337,7 +337,7 @@ QPushButton[warning="true"]:pressed {
 QPushButton[success="true"] {
     background-color: rgba(78, 201, 176, 0.6);
     color: #FFFFFF;
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     border-radius: 8px;
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
@@ -346,13 +346,13 @@ QPushButton[success="true"] {
 
 QPushButton[success="true"]:hover {
     background-color: rgba(95, 212, 187, 0.7);
-    border: 1px solid rgba(180, 180, 180, 0.35);
+    border: 0.5px solid #444444;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
 }
 
 QPushButton[success="true"]:pressed {
     background-color: rgba(61, 182, 157, 0.75);
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
@@ -364,7 +364,7 @@ QPushButton[iconButton="true"] {
     padding: 4px;
     border-radius: 8px;
     background-color: rgba(40, 40, 40, 0.45);
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
@@ -372,13 +372,13 @@ QPushButton[iconButton="true"] {
 
 QPushButton[iconButton="true"]:hover {
     background-color: rgba(60, 60, 60, 0.55);
-    border: 1px solid rgba(180, 180, 180, 0.35);
+    border: 0.5px solid #444444;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 QPushButton[iconButton="true"]:pressed {
     background-color: rgba(35, 35, 35, 0.6);
-    border: 1px solid rgba(180, 180, 180, 0.25);
+    border: 0.5px solid #444444;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
