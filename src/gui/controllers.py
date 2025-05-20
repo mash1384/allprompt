@@ -223,7 +223,7 @@ class FileTreeController(QObject):
                     'rel_path': str(root_rel_path)
                 }
                 root_item.setData(item_metadata, ITEM_DATA_ROLE)  # 메타데이터 추가
-                item_dict[rel_path] = root_item
+                item_dict[str(rel_path)] = root_item
                 self.tree_model.appendRow(root_item)
                 break
         
@@ -239,7 +239,7 @@ class FileTreeController(QObject):
                 'rel_path': str(root_rel_path)
             }
             root_item.setData(item_metadata, ITEM_DATA_ROLE)  # 메타데이터 추가
-            item_dict[root_rel_path] = root_item
+            item_dict[str(root_rel_path)] = root_item
             self.tree_model.appendRow(root_item)
         
         logger.info(f"루트 아이템 생성 완료: {self.current_folder.name}")
@@ -261,6 +261,18 @@ class FileTreeController(QObject):
             # 현재 아이템 이름
             name = path.name
             
+            # 이미 추가된 동일한 이름의 아이템이 있는지 확인
+            already_exists = False
+            for row in range(parent_item.rowCount()):
+                child = parent_item.child(row)
+                if child and child.text() == name:
+                    already_exists = True
+                    break
+                    
+            # 이미 존재하는 아이템이면 중복 추가하지 않음
+            if already_exists:
+                continue
+                
             # 아이템 생성
             item = QStandardItem(name)
             item.setCheckable(True)
@@ -280,7 +292,7 @@ class FileTreeController(QObject):
             
             # 아이템을 부모에 추가
             parent_item.appendRow(item)
-            item_dict[rel_path] = item
+            item_dict[str(rel_path)] = item
         
         # 시그널 다시 연결
         self.tree_model.itemChanged.connect(self.handle_item_change)
@@ -716,54 +728,57 @@ class FileTreeController(QObject):
         # 기본 파일 아이콘
         return self.file_icon
     
-    def _ensure_parent_item(self, rel_path: Path, root_item: QStandardItem, item_dict: Dict[Path, QStandardItem]) -> QStandardItem:
+    def _ensure_parent_item(self, rel_path: Path, root_item: QStandardItem, item_dict: Dict[str, QStandardItem]) -> QStandardItem:
         """
-        경로의 부모 아이템을 찾거나 필요시 생성
+        상대 경로의 부모 항목을 찾거나 생성
         
         Args:
-            rel_path: 찾을 항목의 상대 경로
+            rel_path: 상대 경로
             root_item: 루트 아이템
-            item_dict: 경로-아이템 매핑 딕셔너리
-        
-        Returns:
-            QStandardItem: 찾았거나 새로 생성한 부모 아이템
-        """
-        parent_path = rel_path.parent
-        
-        # 부모 경로가 이미 존재하는 경우 바로 반환
-        parent_item = item_dict.get(parent_path)
-        if parent_item:
-            return parent_item
+            item_dict: 아이템 사전
             
-        # 루트인 경우 루트 아이템 반환
-        if parent_path == Path('.') or not parent_path.parts:
+        Returns:
+            부모 아이템
+        """
+        # 루트 아이템의 자식인 경우
+        if len(rel_path.parts) == 1:
             return root_item
             
-        # 중간 부모 경로 생성 필요
-        current_parent_path = Path('.')
-        current_parent_item = root_item
+        # 부모 경로 계산
+        parent_path = rel_path.parent
         
-        # 부모 경로 분해 및 필요한 중간 노드 생성
-        path_parts = list(parent_path.parts)
+        # 부모 아이템이 이미 생성되어 있는 경우
+        if str(parent_path) in item_dict:
+            return item_dict[str(parent_path)]
+            
+        # 가장 상위 부모부터 차례로 생성 (재귀적으로)
+        grandparent_item = self._ensure_parent_item(parent_path, root_item, item_dict)
         
-        for part in path_parts:
-            current_parent_path = current_parent_path / part
-            if current_parent_path in item_dict:
-                current_parent_item = item_dict[current_parent_path]
-            else:
-                # 중간 경로 노드 생성
-                new_parent_item = QStandardItem(part)
-                new_parent_item.setIcon(self.folder_icon)
-                new_parent_item.setCheckable(True)
-                # 메타데이터 설정
-                item_metadata = {
-                    'is_dir': True,
-                    'abs_path': str(current_parent_path),
-                    'rel_path': str(current_parent_path)
-                }
-                new_parent_item.setData(item_metadata, ITEM_DATA_ROLE)  # 메타데이터 추가
-                current_parent_item.appendRow(new_parent_item)
-                item_dict[current_parent_path] = new_parent_item
-                current_parent_item = new_parent_item
+        # 현재 부모 이름 (parent_path의 마지막 부분)
+        parent_name = parent_path.name if parent_path.name else parent_path
         
-        return current_parent_item 
+        # 이미 추가된 동일한 이름의 아이템이 있는지 확인
+        for row in range(grandparent_item.rowCount()):
+            child = grandparent_item.child(row)
+            if child and child.text() == parent_name:
+                item_dict[str(parent_path)] = child
+                return child
+        
+        # 부모 아이템 생성
+        parent_item = QStandardItem(parent_name)
+        parent_item.setIcon(self.folder_icon)
+        parent_item.setCheckable(True)
+        
+        # 메타데이터 설정
+        parent_metadata = {
+            'is_dir': True,
+            'abs_path': str(self.current_folder / parent_path),
+            'rel_path': str(parent_path)
+        }
+        parent_item.setData(parent_metadata, ITEM_DATA_ROLE)
+        
+        # 부모 아이템을 다시 상위 아이템에 추가
+        grandparent_item.appendRow(parent_item)
+        item_dict[str(parent_path)] = parent_item
+        
+        return parent_item 

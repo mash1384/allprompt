@@ -91,9 +91,16 @@ def _scan_directory_recursive(
         follow_symlinks: 심볼릭 링크를 따라갈지 여부
         include_hidden: 숨김 파일/폴더를 포함할지 여부
     """
+    # 이미 처리된 경로 확인을 위한 집합
+    processed_paths = {item['path'] for item in items}
+    
     try:
         for path in current_path.iterdir():
             try:
+                # 이미 처리된 경로는 건너뜀
+                if path in processed_paths:
+                    continue
+                    
                 is_symlink = path.is_symlink()
                 is_dir = path.is_dir()
                 is_hidden_item = is_hidden(path)
@@ -116,6 +123,7 @@ def _scan_directory_recursive(
                 }
                 
                 items.append(item)
+                processed_paths.add(path)
                 
                 # 디렉토리이고 심볼릭 링크 설정에 따라 재귀 처리
                 if is_dir and (not is_symlink or follow_symlinks):
@@ -137,6 +145,7 @@ def _scan_directory_recursive(
                     'is_hidden': is_hidden(path),
                     'error': 'access_denied'
                 })
+                processed_paths.add(path)
             except Exception as e:
                 logger.error(f"항목 처리 중 오류 ({path}): {e}")
     
