@@ -11,8 +11,8 @@ import os
 from pathlib import Path
 from typing import Optional, Set, Dict, Any
 
-from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer
-from PySide6.QtGui import QStandardItemModel, QFont, QIcon
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer, QModelIndex
+from PySide6.QtGui import QStandardItemModel, QFont, QIcon, QStandardItem
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSizePolicy, QTreeView, QStyle, QApplication
@@ -49,6 +49,8 @@ class LeftPanelWidget(QWidget):
         # 트리 뷰 확장/축소 시그널 연결
         self.tree_view.expanded.connect(self.update_item_icon_on_expand)
         self.tree_view.collapsed.connect(self.update_item_icon_on_collapse)
+        # 트리 뷰 항목 클릭 시그널 연결
+        self.tree_view.item_clicked.connect(self._handle_file_item_clicked)
         
         logger.info("LeftPanelWidget 생성 완료")
     
@@ -130,6 +132,10 @@ class LeftPanelWidget(QWidget):
         if not index.isValid():
             return
             
+        # 트리 모델이 QStandardItemModel인지 확인
+        if not isinstance(self.tree_model, QStandardItemModel):
+            return
+            
         item = self.tree_model.itemFromIndex(index)
         metadata = item.data(ITEM_DATA_ROLE) if item else None
         if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리 항목인 경우만
@@ -174,6 +180,40 @@ class LeftPanelWidget(QWidget):
             index: 축소된 항목의 인덱스
         """
         self.update_item_icon(index, 'folder')
+
+    @Slot(QModelIndex)
+    def _handle_file_item_clicked(self, index):
+        """
+        파일 항목 클릭 처리
+        아이콘/이름 클릭 시 체크박스 상태를 토글합니다.
+        
+        Args:
+            index: 클릭된 아이템의 모델 인덱스
+        """
+        # 트리 모델이 QStandardItemModel인지 확인
+        if not isinstance(self.tree_model, QStandardItemModel):
+            return
+            
+        # 인덱스로부터 항목 가져오기
+        item = self.tree_model.itemFromIndex(index)
+        
+        # 항목 유효성 및 체크 가능 여부 확인
+        if not item or not item.isCheckable() or not item.isEnabled():
+            return
+            
+        # 항목 메타데이터 확인
+        metadata = item.data(ITEM_DATA_ROLE)
+        
+        # 파일 항목인 경우에만 체크 상태 토글
+        if isinstance(metadata, dict) and not metadata.get('is_dir', False):
+            # 현재 체크 상태 확인
+            current_state = item.checkState()
+            
+            # 체크 상태 토글
+            if current_state == Qt.Checked:
+                item.setCheckState(Qt.Unchecked)
+            else:
+                item.setCheckState(Qt.Checked)
 
 
 class RightPanelWidget(QWidget):
