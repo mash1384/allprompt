@@ -595,28 +595,14 @@ class MainWindow(QMainWindow):
             clear_enabled=False
         )
         
-        # 마지막 사용 디렉토리 로드
-        try:
-            # 마지막으로 사용한 디렉토리 불러오기 (없으면 현재 작업 디렉토리 사용)
-            last_directory = self.settings_manager.get_setting('last_directory', os.getcwd())
-            
-            # 디렉토리가 존재하는지 확인
-            if os.path.isdir(last_directory):
-                self._load_folder(last_directory)
-                logger.info(f"마지막 사용 디렉토리 로드: {last_directory}")
-            else:
-                # 존재하지 않는 경우 현재 작업 디렉토리 사용
-                initial_dir = os.getcwd()
-                self._load_folder(initial_dir)
-                logger.info(f"마지막 디렉토리가 존재하지 않아 현재 디렉토리 로드: {initial_dir}")
-        except Exception as e:
-            # 오류 발생 시 현재 작업 디렉토리 사용
-            logger.warning(f"마지막 사용 디렉토리 로드 실패: {e}")
-            try:
-                initial_dir = os.getcwd()
-                self._load_folder(initial_dir)
-            except Exception as e2:
-                logger.error(f"기본 폴더 로드 실패: {e2}")
+        # 마지막 사용 디렉토리 로드 기능 비활성화
+        # 사용자가 직접 폴더를 선택해야만 파일트리에 폴더가 표시됨
+        logger.info("앱 시작 시 폴더 자동 로드 비활성화됨")
+        
+        # 초기 상태 설정 - 파일/폴더 없음
+        self.right_panel.update_folder_path("")
+        self.right_panel.update_selection_info("0", "0")
+        self.progress_bar.setValue(0)
     
     def closeEvent(self, event):
         """

@@ -17,8 +17,8 @@ import appdirs
 logger = logging.getLogger(__name__)
 
 # 애플리케이션 정보
-APP_NAME = "LLMPromptHelper"
-APP_AUTHOR = "LLMPromptHelper"
+APP_NAME = "allprompt"
+APP_AUTHOR = "allprompt"
 APP_VERSION = "0.1.0"
 
 class SettingsManager:
