@@ -149,8 +149,7 @@ class CustomTreeView(QTreeView):
                 self._checkbox_click_in_progress = True
                 # 중요: 체크박스 클릭 시 이벤트를 소비하여 다른 클릭 이벤트로 전파되지 않게 함
                 event.accept()
-                # 기본 이벤트 처리는 여전히 필요 (체크박스 시각적 피드백을 위해)
-                super().mousePressEvent(event)
+                # 기본 이벤트 처리 제거 - 체크박스 클릭 시 폴더 접힘/펴짐 동작 방지
                 return
             
             # 체크박스 영역이 아닌 경우 기본 마우스 이벤트 처리
@@ -171,46 +170,42 @@ class CustomTreeView(QTreeView):
             self._press_pos = None
             return
         
-        # '순수한 체크박스 클릭' 확인: 
-        press_index = self.indexAt(self._press_pos) if self._press_pos else None
-        
-        # 1. 체크박스 클릭 진행 중 플래그가 설정되어 있고
-        # 2. 마우스 누른 위치와 놓은 위치가 같은 아이템인지 확인
-        # 3. 놓은 위치도 체크박스 영역인지 확인
-        if (self._checkbox_click_in_progress and 
-            press_index == index and
-            press_index is not None and
-            self._is_checkbox_area(index, event.pos())):
-            
-            # 체크박스 상태 토글
-            model = self.model()
-            if model:
-                current_state = model.data(index, Qt.CheckStateRole)
-                if current_state == Qt.Checked:
-                    new_state = Qt.Unchecked
-                else:
-                    new_state = Qt.Checked
-                model.setData(index, new_state, Qt.CheckStateRole)
-            
-            # 체크박스 클릭 시그널 발생
-            self.checkbox_clicked.emit(index)
-            
-            # 이벤트 소비 - 중요: 이후 처리가 일어나지 않도록 여기서 반환
-            event.accept()
-            
-            # 플래그 초기화
-            self._checkbox_click_in_progress = False
-            self._press_pos = None
-            return
-            
-        # 이미 체크박스 클릭 처리가 진행 중이었던 경우, 여기서 모든 처리를 중단
+        # 체크박스 클릭 플래그 우선 확인 (최우선 순위)
         if self._checkbox_click_in_progress:
-            self._checkbox_click_in_progress = False
-            self._press_pos = None
-            event.accept()  # 이벤트 소비
-            return
+            # 현재 마우스 위치가 체크박스 영역인지 확인
+            is_current_pos_checkbox = self._is_checkbox_area(index, event.pos())
+            
+            if is_current_pos_checkbox:
+                # 체크박스 상태 토글
+                model = self.model()
+                if model:
+                    current_state = model.data(index, Qt.CheckStateRole)
+                    if current_state == Qt.Checked:
+                        new_state = Qt.Unchecked
+                    else:
+                        new_state = Qt.Checked
+                    model.setData(index, new_state, Qt.CheckStateRole)
+                
+                # 체크박스 클릭 시그널 발생
+                self.checkbox_clicked.emit(index)
+                
+                # 이벤트 소비
+                event.accept()
+                
+                # 플래그 초기화 및 즉시 반환
+                self._checkbox_click_in_progress = False
+                self._press_pos = None
+                return
+            else:
+                # 체크박스 영역 밖에서 마우스를 뗀 경우에도
+                # 폴더 확장/축소가 일어나지 않도록 처리
+                event.accept()
+                self._checkbox_click_in_progress = False
+                self._press_pos = None
+                return
         
-        # 체크박스 클릭이 아닌 경우: 일반 아이템 클릭 처리
+        # 폴더 확장/축소 또는 일반 아이템 클릭 처리
+        # (_checkbox_click_in_progress가 False인 경우에만 고려)
         model = self.model()
         if model:
             item = model.itemFromIndex(index)
@@ -225,16 +220,26 @@ class CustomTreeView(QTreeView):
             
             # 디렉토리인 경우 - 확장/축소 처리
             elif item and isinstance(metadata, dict) and metadata.get('is_dir', False):
-                if (self._is_branch_indicator_area(index, event.pos()) or 
-                    (self._press_pos is not None and self.indexAt(self._press_pos) == index)):
-                    # 폴더 확장/축소 수동 처리
-                    if self.isExpanded(index):
-                        self.collapse(index)
-                    else:
-                        self.expand(index)
-                    event.accept()
-                    self._press_pos = None
-                    return
+                is_current_pos_checkbox = self._is_checkbox_area(index, event.pos())
+                
+                # 체크박스 영역이 아닌 경우에만 폴더 확장/축소 고려
+                if not is_current_pos_checkbox:
+                    is_branch_area = self._is_branch_indicator_area(index, event.pos())
+                    press_index = self.indexAt(self._press_pos) if self._press_pos else None
+                    
+                    # 브랜치 인디케이터 영역 클릭 또는
+                    # 브랜치 인디케이터 영역이 아닌 일반 아이템 영역 클릭 
+                    # (마우스 누른/뗀 위치가 같은 경우에만)
+                    if (is_branch_area or 
+                        (not is_branch_area and press_index == index)):
+                        # 폴더 확장/축소 수행
+                        if self.isExpanded(index):
+                            self.collapse(index)
+                        else:
+                            self.expand(index)
+                        event.accept()
+                        self._press_pos = None
+                        return
         
         # 기본 마우스 릴리스 이벤트 처리
         super().mouseReleaseEvent(event)
@@ -249,17 +254,23 @@ class CustomTreeView(QTreeView):
         index = self.indexAt(event.pos())
         
         if index.isValid():
-            # 모델에서 해당 아이템이 디렉토리인지 확인
-            model = self.model()
-            if model:
-                item = model.itemFromIndex(index)
-                metadata = item.data(ITEM_DATA_ROLE) if item else None
-                if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
-                    # 폴더 확장/축소 수동 처리
-                    if self.isExpanded(index):
-                        self.collapse(index)
-                    else:
-                        self.expand(index)
+            # 체크박스나 브랜치 인디케이터 영역인지 확인
+            is_checkbox_area = self._is_checkbox_area(index, event.pos())
+            is_branch_area = self._is_branch_indicator_area(index, event.pos())
+            
+            # 체크박스나 브랜치 인디케이터 영역이 아닌 경우에만 폴더 확장/축소 처리
+            if not is_checkbox_area and not is_branch_area:
+                # 모델에서 해당 아이템이 디렉토리인지 확인
+                model = self.model()
+                if model:
+                    item = model.itemFromIndex(index)
+                    metadata = item.data(ITEM_DATA_ROLE) if item else None
+                    if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
+                        # 폴더 확장/축소 수행
+                        if self.isExpanded(index):
+                            self.collapse(index)
+                        else:
+                            self.expand(index)
         
         # 이벤트 소비 (기본 처리 방지)
         event.accept()
