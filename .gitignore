@@ -60,5 +60,4 @@ memory-bank/
 *.entitlements 
 
 dmg_source/
-
-.dmg
+*.dmg
