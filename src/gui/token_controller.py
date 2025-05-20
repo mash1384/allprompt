@@ -158,6 +158,10 @@ class TokenController(QObject):
             self.token_thread.stop()
             self.token_thread.wait()
         
+        # 토큰 캐시와 총 토큰 수 초기화
+        self.token_cache = {}
+        self.total_tokens = 0
+        
         # files_count가 제공되지 않으면 직접 계산
         if files_count is None:
             files_count = len(files)
@@ -216,11 +220,15 @@ class TokenController(QObject):
         # 상태 메시지 업데이트
         self.token_calculation_status_signal.emit("토큰 계산 완료", False)
         
-        # 토큰 수 업데이트 (UI 갱신)
-        self._update_token_count(files_count=getattr(self, 'current_files_count', None))
+        # token_cache의 모든 토큰 값 합산하여 total_tokens 업데이트
+        self.total_tokens = sum(self.token_cache.values())
+        
+        # 토큰 수 포맷팅 및 시그널 발생
+        formatted_tokens = f"{self.total_tokens:,}"
+        self.total_tokens_updated_signal.emit(formatted_tokens, getattr(self, 'current_files_count', 0))
         
         # 로그 기록
-        logger.debug(f"Token calculation finished: {len(self.token_cache)} files calculated")
+        logger.debug(f"Token calculation finished: {len(self.token_cache)} files calculated, total tokens: {self.total_tokens}")
     
     def _on_token_calculation_error(self, error_msg: str):
         """
