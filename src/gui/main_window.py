@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QStyle, QCheckBox, QSizePolicy, QDialog, QDialogButtonBox, QFormLayout,
     QLineEdit, QComboBox, QStyledItemDelegate, QProxyStyle, QStyleOptionViewItem
 )
-from PySide6.QtCore import Qt, QSize, QDir, Signal, Slot, QThread, QSortFilterProxyModel, QModelIndex, QEvent, QObject, QRect
+from PySide6.QtCore import Qt, QSize, QDir, Signal, Slot, QThread, QSortFilterProxyModel, QModelIndex, QEvent, QObject, QRect, QTimer
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon, QAction, QFont, QDesktopServices, QPainter, QCursor
 
 # 커스텀 위젯 임포트
@@ -581,18 +581,21 @@ class MainWindow(QMainWindow):
         """
         logger.info(f"선택 변경: 파일 {files_count}개, 폴더 {dirs_count}개")
         
-        # 복사 버튼 상태 업데이트
+        # 복사 버튼 상태 업데이트 - 즉시 진행하여 UI 응답성 유지
         has_items = len(checked_items_set) > 0
         self.right_panel.set_buttons_enabled(has_items, has_items)
         
-        # 토큰 계산 요청
-        if has_items:
-            # 토큰 컨트롤러에 체크된 아이템과 파일 수 전달
-            self.token_controller.calculate_tokens(checked_items_set, files_count)
-        else:
-            # 선택 항목 없을 때 UI 리셋
+        if not has_items:
+            # 선택 항목 없을 때 UI 리셋 - 즉시 진행
             self.right_panel.update_selection_info("0", "0")
             self.progress_bar.setValue(0)
+            return
+            
+        # 토큰 계산 요청은 UI 스레드와 분리하여 지연 실행
+        # 이렇게 하면 연속 클릭 시에도 UI가 즉시 반응함
+        QTimer.singleShot(0, lambda checked_set=checked_items_set, count=files_count: 
+            self.token_controller.calculate_tokens(checked_set, count)
+        )
     
     def _on_model_updated(self, model):
         """

@@ -156,76 +156,57 @@ class CustomTreeView(QTreeView):
     
     def mouseReleaseEvent(self, event):
         """마우스 놓음 이벤트 처리"""
+        # 클릭한 인덱스 가져오기
         index = self.indexAt(event.pos())
         
+        # 유효하지 않은 인덱스인 경우 기본 처리 후 종료
         if not index.isValid():
-            # 유효하지 않은 인덱스에 대한 클릭은 기본 처리
             super().mouseReleaseEvent(event)
             return
-            
-        # 브랜치 인디케이터 영역 클릭 확인
-        if self._is_branch_indicator_area(index, event.pos()):
-            # 모델에서 해당 항목이 디렉토리인지 확인
+        
+        # 체크박스 영역 클릭이 아닌 경우만 처리
+        if not self._is_checkbox_area(index, event.pos()):
             model = self.model()
             if model:
                 item = model.itemFromIndex(index)
                 metadata = item.data(ITEM_DATA_ROLE) if item else None
-                if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
-                    # 폴더 확장/축소 수동 처리
-                    if self.isExpanded(index):
-                        self.collapse(index)
-                    else:
-                        self.expand(index)
-                    # 이벤트 소비
-                    event.accept()
-                elif item and (not isinstance(metadata, dict) or not metadata.get('is_dir', False)):  # 파일인 경우만
-                    # 일반 아이템 영역 클릭 시그널 발생 (파일만)
+                
+                # 파일인 경우 즉시 처리하고 이벤트 소비
+                if item and (not isinstance(metadata, dict) or not metadata.get('is_dir', False)):
                     self.item_clicked.emit(index)
-        
-        # 체크박스 클릭 진행 중이었는지 확인
-        if self._checkbox_click_in_progress:
-            # 체크박스 클릭 영역에서 마우스를 놓았는지 확인
-            if self._is_checkbox_area(index, event.pos()):
-                # 체크박스 클릭 완료 - 기본 처리 호출 (체크박스 상태 변경)
-                super().mouseReleaseEvent(event)
+                    event.accept()  # 이벤트 소비하여 중복 처리 방지
+                    return  # 여기서 즉시 반환하여 추가 처리 방지
                 
-                # 체크박스 클릭 시그널 발생
-                self.checkbox_clicked.emit(index)
-                
-                # 체크박스 클릭 플래그 초기화
-                self._checkbox_click_in_progress = False
-                
-                # 이벤트 소비
-                event.accept()
-                return
-                
-        # 체크박스 클릭이 아닌 일반 아이템 영역 클릭 처리
-        self._checkbox_click_in_progress = False
-        
-        # 기본 마우스 릴리스 이벤트 처리
-        super().mouseReleaseEvent(event)
-        
-        # 클릭 완료 후 처리 (체크박스 외부 클릭)
-        if self._press_pos is not None:
-            # 시작 위치와 종료 위치가 동일한 영역인지 확인 (드래그 방지)
-            start_index = self.indexAt(self._press_pos)
-            if start_index == index and not self._is_checkbox_area(index, event.pos()):
-                model = self.model()
-                if model:
-                    item = model.itemFromIndex(index)
-                    metadata = item.data(ITEM_DATA_ROLE) if item else None
-                    if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
+                # 디렉토리인 경우 확장/축소 처리
+                elif item and isinstance(metadata, dict) and metadata.get('is_dir', False):
+                    if self._is_branch_indicator_area(index, event.pos()) or (self._press_pos is not None and self.indexAt(self._press_pos) == index):
                         # 폴더 확장/축소 수동 처리
                         if self.isExpanded(index):
                             self.collapse(index)
                         else:
                             self.expand(index)
-                        # 이벤트 소비
                         event.accept()
-                    elif item and (not isinstance(metadata, dict) or not metadata.get('is_dir', False)):  # 파일인 경우만
-                        # 일반 아이템 영역 클릭 시그널 발생 (파일만)
-                        self.item_clicked.emit(index)
-                        
+                        self._press_pos = None
+                        return
+        
+        # 체크박스 클릭 처리
+        if self._checkbox_click_in_progress and self._is_checkbox_area(index, event.pos()):
+            # 체크박스 클릭 완료 - 기본 처리 호출 (체크박스 상태 변경)
+            super().mouseReleaseEvent(event)
+            
+            # 체크박스 클릭 시그널 발생
+            self.checkbox_clicked.emit(index)
+            
+            # 체크박스 클릭 플래그 초기화
+            self._checkbox_click_in_progress = False
+            
+            # 이벤트 소비
+            event.accept()
+            return
+        
+        # 기본 마우스 릴리스 이벤트 처리
+        super().mouseReleaseEvent(event)
+        
         # 클릭 위치 초기화
         self._press_pos = None
     

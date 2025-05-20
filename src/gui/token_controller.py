@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QObject, Signal, QThread
+from PySide6.QtCore import QObject, Signal, QThread, QTimer
 
 from src.core.tokenizer import Tokenizer
 from src.core.file_scanner import is_binary_file, read_text_file
@@ -93,6 +93,12 @@ class TokenController(QObject):
         self.token_cache = {}  # Cache for token counts {file_path: token_count}
         self.total_tokens = 0  # Total token count for selected files
         self.token_thread = None  # Background calculation thread
+        
+        # 디바운싱을 위한 타이머 설정
+        self.calculation_timer = QTimer(self)
+        self.calculation_timer.setSingleShot(True)
+        self.calculation_timer.timeout.connect(self._perform_actual_calculation)
+        self._pending_calculation_data = None
     
     def calculate_tokens(self, checked_items_set: set, files_count: int = None):
         """
@@ -108,6 +114,20 @@ class TokenController(QObject):
         # files_count가 제공되지 않으면 직접 계산
         if files_count is None:
             files_count = len(files_to_calculate)
+        
+        # 계산 요청 데이터를 저장하고 타이머 시작
+        self._pending_calculation_data = (files_to_calculate, files_count)
+        self.calculation_timer.start(300)  # 300ms 디바운스 시간
+    
+    def _perform_actual_calculation(self):
+        """
+        디바운싱 타이머 완료 후 실제 계산을 수행하는 메소드
+        """
+        if self._pending_calculation_data is None:
+            return
+            
+        files_to_calculate, files_count = self._pending_calculation_data
+        self._pending_calculation_data = None
         
         if files_to_calculate:
             self.start_calculation(files_to_calculate, files_count)

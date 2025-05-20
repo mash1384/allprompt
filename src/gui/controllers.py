@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Set, Union, Tuple
 
-from PySide6.QtCore import Qt, QObject, Signal
+from PySide6.QtCore import Qt, QObject, Signal, QTimer
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon
 
 # 코어 모듈 임포트
@@ -325,28 +325,56 @@ class FileTreeController(QObject):
         
         self._processing_check_event = True
         
+        # 파일인지 디렉토리인지 확인
+        is_dir = item_path.is_dir() if item_path.exists() else False
+        is_file = not is_dir
+        path_str = str(item_path)
+        
         try:
             # 일시적으로 모델 시그널 연결 해제
             self.tree_model.itemChanged.disconnect(self.handle_item_change)
             
-            # 1. 현재 아이템 상태 업데이트
-            path_str = str(item_path)
-            is_dir = item_path.is_dir()
-            
+            # 1. 현재 아이템 상태 업데이트 - 항상 즉시 처리
             if checked:
                 self.checked_items.add(path_str)
             else:
                 self.checked_items.discard(path_str)
             
-            # 2. 폴더인 경우 하위 항목도 같은 상태로 설정
-            if is_dir:
+            # 파일 항목인 경우와 디렉토리인 경우 처리 분리
+            if is_file:
+                # 파일인 경우 하위 처리 없이 즉시 체크 상태만 업데이트
+                # 토큰 계산은 지연 실행
+                
+                # 체크 통계 빠르게 업데이트
+                if checked:
+                    self.checked_files += 1
+                else:
+                    self.checked_files = max(0, self.checked_files - 1)
+                
+                # UI 업데이트를 위한 시그널만 지연 발생
+                QTimer.singleShot(0, lambda: self.selection_changed_signal.emit(
+                    self.checked_files, 
+                    self.checked_dirs,
+                    self.checked_items
+                ))
+            else:
+                # 디렉토리인 경우 기존 로직대로 처리
+                # 2. 하위 항목도 같은 상태로 설정
                 self._set_item_checked_state(item, checked)
-            
-            # 3. 부모 폴더의 체크 상태 업데이트
-            self._update_parent_checked_state(item)
-            
-            # 4. 체크 통계 업데이트 (파일/폴더 카운트)
-            self._update_check_stats()
+                
+                # 3. 부모 폴더의 체크 상태 업데이트
+                self._update_parent_checked_state(item)
+                
+                # 4. 체크 통계 업데이트
+                self._update_check_stats()
+                
+                # 5. UI 응답성 향상을 위해 selection_changed_signal은 지연 발생
+                QTimer.singleShot(0, lambda: self.selection_changed_signal.emit(
+                    self.checked_files, 
+                    self.checked_dirs,
+                    self.checked_items
+                ))
+                
         finally:
             # 모델 시그널 다시 연결
             self.tree_model.itemChanged.connect(self.handle_item_change)

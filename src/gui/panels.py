@@ -15,7 +15,7 @@ from PySide6.QtCore import Qt, Signal, Slot, QSize, QTimer, QModelIndex
 from PySide6.QtGui import QStandardItemModel, QFont, QIcon, QStandardItem
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSizePolicy, QTreeView, QStyle, QApplication
+    QSizePolicy, QTreeView, QStyle, QApplication, QSplitter, QScrollArea
 )
 
 from .custom_widgets import CustomTreeView, CheckableItemDelegate
@@ -204,16 +204,34 @@ class LeftPanelWidget(QWidget):
         # 항목 메타데이터 확인
         metadata = item.data(ITEM_DATA_ROLE)
         
-        # 파일 항목인 경우에만 체크 상태 토글
+        # 파일 항목인 경우에만 체크 상태 토글 - 즉시 처리
         if isinstance(metadata, dict) and not metadata.get('is_dir', False):
-            # 현재 체크 상태 확인
+            # 기존 연결 일시 해제 (중복 처리 방지)
+            try:
+                model_connections_count = self.tree_model.receivers(self.tree_model.itemChanged)
+                temporarily_disconnect = model_connections_count > 0
+            except:
+                temporarily_disconnect = False
+                
+            # 체크 상태 토글 (UI는 즉시 반응)
             current_state = item.checkState()
             
-            # 체크 상태 토글
+            if temporarily_disconnect:
+                # 시그널 일시 해제로 빠른 처리
+                self.tree_model.blockSignals(True)
+                
+            # 체크 상태 변경
             if current_state == Qt.Checked:
                 item.setCheckState(Qt.Unchecked)
             else:
                 item.setCheckState(Qt.Checked)
+                
+            if temporarily_disconnect:
+                # 시그널 다시 연결
+                self.tree_model.blockSignals(False)
+                
+            # 토큰 계산을 위한 시그널은 별도로 0ms 지연 실행
+            QTimer.singleShot(0, lambda: None)
 
 
 class RightPanelWidget(QWidget):
