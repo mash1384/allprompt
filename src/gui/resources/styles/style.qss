@@ -133,39 +133,47 @@ QMenu::indicator {
     padding-left: 6px;
 }
 
-/* 버튼 스타일 - 미니멀 플랫 디자인 */
+/* 버튼 스타일 - 미니멀 글라스모피즘 디자인 */
 QPushButton {
-    background-color: #2D2D2D;
+    background-color: rgba(40, 40, 40, 0.55);
     color: #D0D0D0;
-    border: 1px solid #333333;
-    border-radius: 3px;
-    padding: 8px 12px;
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    border-radius: 8px;
+    padding: 6px 12px;
     min-width: 80px;
     text-align: center;
     font-weight: normal;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 QPushButton:hover {
-    background-color: #3A3A3A;
+    background-color: rgba(52, 52, 52, 0.65);
+    border: 1px solid rgba(180, 180, 180, 0.35);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
 }
 
 QPushButton:pressed {
-    background-color: #202020;
-    padding-top: 9px;
+    background-color: rgba(30, 30, 30, 0.7);
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    padding-top: 7px;
     padding-left: 13px;
-    padding-bottom: 7px;
+    padding-bottom: 5px;
     padding-right: 11px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 QPushButton:focus {
     outline: none;
-    border: 1px solid #007ACC;
+    border: 1px solid rgba(180, 180, 180, 0.4);
 }
 
 QPushButton:disabled {
-    background-color: #252526;
-    color: #5D5D5D;
-    border: 1px solid #2D2D2D;
+    background-color: rgba(37, 37, 38, 0.4);
+    color: rgba(93, 93, 93, 0.7);
+    border: 1px solid rgba(180, 180, 180, 0.15);
+    box-shadow: none;
 }
 
 /* 통일된 메인 버튼 스타일 (모든 주요 버튼) */
@@ -173,147 +181,179 @@ QPushButton#openFolderButton,
 QPushButton#copyButton, 
 QPushButton#clearButton,
 QPushButton#settingsButton {
-    background-color: #2A2A2A; 
+    background-color: rgba(30, 30, 30, 0.55); 
     color: #FFFFFF;
-    border: none;
-    border-radius: 12px;
-    padding: 8px 16px;
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    border-radius: 8px;
+    padding: 6px 12px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
     font-weight: 500;
     letter-spacing: 0.5px;
-    min-height: 40px;
+    min-height: 36px;
     text-align: left;
-    icon-size: 18px;
+    icon-size: 16px;
     margin: 1px 0px;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
 QPushButton#openFolderButton:hover,
 QPushButton#copyButton:hover,
 QPushButton#clearButton:hover,
 QPushButton#settingsButton:hover {
-    background-color: #383838;
+    background-color: rgba(60, 60, 60, 0.65);
+    border: 1px solid rgba(180, 180, 180, 0.35);
     transition: background-color 0.2s, border-color 0.2s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 QPushButton#openFolderButton:pressed,
 QPushButton#copyButton:pressed,
 QPushButton#clearButton:pressed,
 QPushButton#settingsButton:pressed {
-    background-color: #1E1E1E;
-    padding-top: 9px;
-    padding-left: 17px;
-    padding-bottom: 7px;
-    padding-right: 15px;
+    background-color: rgba(25, 25, 25, 0.7);
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    padding-top: 7px;
+    padding-left: 13px;
+    padding-bottom: 5px;
+    padding-right: 11px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 QPushButton#openFolderButton:disabled,
 QPushButton#copyButton:disabled,
 QPushButton#clearButton:disabled,
 QPushButton#settingsButton:disabled {
-    background-color: #222222;
-    color: #4D4D4D;
+    background-color: rgba(30, 30, 30, 0.35);
+    color: rgba(180, 180, 180, 0.45);
+    border: 1px solid rgba(180, 180, 180, 0.15);
+    box-shadow: none;
 }
 
 /* 복사 버튼 - 강조 버튼 */
 QPushButton#copyButton {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                stop:0 #1976D2, stop:1 #0D47A1);
+                                stop:0 rgba(25, 118, 210, 0.65), stop:1 rgba(13, 71, 161, 0.65));
 }
 
 QPushButton#copyButton:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #1E88E5, stop:1 #1565C0);
+                               stop:0 rgba(30, 136, 229, 0.75), stop:1 rgba(21, 101, 192, 0.75));
 }
 
 QPushButton#copyButton:pressed {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #0D47A1, stop:1 #1565C0);
+                               stop:0 rgba(13, 71, 161, 0.75), stop:1 rgba(21, 101, 192, 0.75));
 }
 
 /* Clear 버튼 - 경고 버튼 */
 QPushButton#clearButton {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #424242, stop:1 #303030);
+                               stop:0 rgba(66, 66, 66, 0.65), stop:1 rgba(48, 48, 48, 0.65));
 }
 
 QPushButton#clearButton:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #505050, stop:1 #404040);
+                               stop:0 rgba(80, 80, 80, 0.75), stop:1 rgba(64, 64, 64, 0.75));
 }
 
 QPushButton#clearButton:pressed {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #303030, stop:1 #404040);
+                               stop:0 rgba(48, 48, 48, 0.75), stop:1 rgba(64, 64, 64, 0.75));
 }
 
 /* 오픈 폴더 버튼 */
 QPushButton#openFolderButton {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #383838, stop:1 #2A2A2A);
+                               stop:0 rgba(56, 56, 56, 0.65), stop:1 rgba(42, 42, 42, 0.65));
 }
 
 QPushButton#openFolderButton:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #404040, stop:1 #343434);
+                               stop:0 rgba(64, 64, 64, 0.75), stop:1 rgba(52, 52, 52, 0.75));
 }
 
 QPushButton#openFolderButton:pressed {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #2A2A2A, stop:1 #343434);
+                               stop:0 rgba(42, 42, 42, 0.75), stop:1 rgba(52, 52, 52, 0.75));
 }
 
 /* 설정 버튼 */
 QPushButton#settingsButton {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 #383838, stop:1 #2A2A2A);
+                               stop:0 rgba(56, 56, 56, 0.65), stop:1 rgba(42, 42, 42, 0.65));
 }
 
 /* 세컨더리 버튼 */
 QPushButton[secondary="true"] {
-    background-color: transparent;
-    border: 1px solid #333333;
+    background-color: rgba(30, 30, 30, 0.5);
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    border-radius: 8px;
     font-weight: normal;
+    padding: 6px 12px;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
 }
 
 QPushButton[secondary="true"]:hover {
-    background-color: #2D2D2D;
-    border: 1px solid #007ACC;
+    background-color: rgba(42, 42, 42, 0.6);
+    border: 1px solid rgba(180, 180, 180, 0.35);
+    box-shadow: 0 3px 7px rgba(0, 0, 0, 0.22);
 }
 
 QPushButton[secondary="true"]:pressed {
-    background-color: #1E1E1E;
-    border: 1px solid #1B90E0;
+    background-color: rgba(25, 25, 25, 0.65);
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* 경고/삭제 버튼 */
 QPushButton[warning="true"] {
-    background-color: #F44747;
+    background-color: rgba(244, 71, 71, 0.6);
     color: #FFFFFF;
-    border: none;
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    border-radius: 8px;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 QPushButton[warning="true"]:hover {
-    background-color: #FF5252;
+    background-color: rgba(255, 82, 82, 0.7);
+    border: 1px solid rgba(180, 180, 180, 0.35);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
 }
 
 QPushButton[warning="true"]:pressed {
-    background-color: #E43535;
+    background-color: rgba(228, 53, 53, 0.75);
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
 /* 성공 버튼 */
 QPushButton[success="true"] {
-    background-color: #4EC9B0;
+    background-color: rgba(78, 201, 176, 0.6);
     color: #FFFFFF;
-    border: none;
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    border-radius: 8px;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 QPushButton[success="true"]:hover {
-    background-color: #5FD4BB;
+    background-color: rgba(95, 212, 187, 0.7);
+    border: 1px solid rgba(180, 180, 180, 0.35);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
 }
 
 QPushButton[success="true"]:pressed {
-    background-color: #3DB69D;
+    background-color: rgba(61, 182, 157, 0.75);
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
 /* 아이콘 버튼 */
@@ -322,17 +362,24 @@ QPushButton[iconButton="true"] {
     width: 28px;
     height: 28px;
     padding: 4px;
-    border-radius: 3px;
-    background-color: transparent;
-    border: none;
+    border-radius: 8px;
+    background-color: rgba(40, 40, 40, 0.45);
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 QPushButton[iconButton="true"]:hover {
-    background-color: #2D2D2D;
+    background-color: rgba(60, 60, 60, 0.55);
+    border: 1px solid rgba(180, 180, 180, 0.35);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 QPushButton[iconButton="true"]:pressed {
-    background-color: #252526;
+    background-color: rgba(35, 35, 35, 0.6);
+    border: 1px solid rgba(180, 180, 180, 0.25);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 /* 트리 뷰 스타일 */
