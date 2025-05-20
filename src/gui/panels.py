@@ -278,7 +278,8 @@ class RightPanelWidget(QWidget):
         self.open_folder_button.setIcon(self.folder_icon)
         # 버튼 크기 정책 설정 - 너비 채우기
         self.open_folder_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.open_folder_button.setMinimumHeight(40)  # 버튼 높이 증가
+        self.open_folder_button.setMinimumHeight(40)  # 버튼 높이 미니멀하게 수정
+        self.open_folder_button.setIconSize(QSize(18, 18))  # 아이콘 크기 축소
         folder_layout.addWidget(self.open_folder_button)
         
         # 현재 폴더 경로를 표시할 수평 레이아웃
@@ -377,12 +378,12 @@ class RightPanelWidget(QWidget):
         # 복사 버튼을 위한 문서 아이콘 사용
         self.copy_button.setIcon(self.copy_icon)
         # 아이콘 설정
-        self.copy_button.setIconSize(QSize(20, 20))
+        self.copy_button.setIconSize(QSize(18, 18))
         self.copy_button.setLayoutDirection(Qt.LeftToRight)
         self.copy_button.setEnabled(False)  # 초기에 비활성화
         # 복사 버튼 크기 정책
         self.copy_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.copy_button.setMinimumHeight(44)
+        self.copy_button.setMinimumHeight(40)
         action_layout.addWidget(self.copy_button)
         
         # 선택 지우기 버튼
@@ -390,21 +391,21 @@ class RightPanelWidget(QWidget):
         self.clear_button.setObjectName("clearButton")
         # 클리어 버튼을 위한 X 아이콘 사용
         self.clear_button.setIcon(self.clear_icon)
-        self.clear_button.setIconSize(QSize(20, 20))
+        self.clear_button.setIconSize(QSize(18, 18))
         self.clear_button.setLayoutDirection(Qt.LeftToRight)
         self.clear_button.setEnabled(False)  # 초기에 비활성화
         self.clear_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.clear_button.setMinimumHeight(44)
+        self.clear_button.setMinimumHeight(40)
         action_layout.addWidget(self.clear_button)
         
         # 설정 버튼
         self.settings_button = QPushButton("Settings")
         self.settings_button.setObjectName("settingsButton")
         self.settings_button.setIcon(self.settings_icon)
-        self.settings_button.setIconSize(QSize(20, 20))
+        self.settings_button.setIconSize(QSize(18, 18))
         self.settings_button.setLayoutDirection(Qt.LeftToRight)
         self.settings_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.settings_button.setMinimumHeight(44)
+        self.settings_button.setMinimumHeight(40)
         action_layout.addWidget(self.settings_button)
         
         right_panel_layout.addWidget(action_container)
