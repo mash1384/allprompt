@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.setWindowTitle("allprompt")
+        self.resize(1200, 800)
         
         # Initialize progress bar
         self.progress_bar = QProgressBar()
