@@ -147,8 +147,13 @@ class CustomTreeView(QTreeView):
             if is_checkbox_click:
                 # 체크박스 클릭 진행 중 플래그 설정
                 self._checkbox_click_in_progress = True
+                # 중요: 체크박스 클릭 시 이벤트를 소비하여 다른 클릭 이벤트로 전파되지 않게 함
+                event.accept()
+                # 기본 이벤트 처리는 여전히 필요 (체크박스 시각적 피드백을 위해)
+                super().mousePressEvent(event)
+                return
             
-            # 체크박스 영역 클릭 여부와 관계없이 기본 마우스 이벤트 처리
+            # 체크박스 영역이 아닌 경우 기본 마우스 이벤트 처리
             super().mousePressEvent(event)
         else:
             # 유효하지 않은 인덱스에 대한 클릭은 기본 처리
@@ -162,52 +167,80 @@ class CustomTreeView(QTreeView):
         # 유효하지 않은 인덱스인 경우 기본 처리 후 종료
         if not index.isValid():
             super().mouseReleaseEvent(event)
+            self._checkbox_click_in_progress = False
+            self._press_pos = None
             return
         
-        # 체크박스 영역 클릭이 아닌 경우만 처리
-        if not self._is_checkbox_area(index, event.pos()):
+        # '순수한 체크박스 클릭' 확인: 
+        press_index = self.indexAt(self._press_pos) if self._press_pos else None
+        
+        # 1. 체크박스 클릭 진행 중 플래그가 설정되어 있고
+        # 2. 마우스 누른 위치와 놓은 위치가 같은 아이템인지 확인
+        # 3. 놓은 위치도 체크박스 영역인지 확인
+        if (self._checkbox_click_in_progress and 
+            press_index == index and
+            press_index is not None and
+            self._is_checkbox_area(index, event.pos())):
+            
+            # 체크박스 상태 토글
             model = self.model()
             if model:
-                item = model.itemFromIndex(index)
-                metadata = item.data(ITEM_DATA_ROLE) if item else None
-                
-                # 파일인 경우 즉시 처리하고 이벤트 소비
-                if item and (not isinstance(metadata, dict) or not metadata.get('is_dir', False)):
-                    self.item_clicked.emit(index)
-                    event.accept()  # 이벤트 소비하여 중복 처리 방지
-                    return  # 여기서 즉시 반환하여 추가 처리 방지
-                
-                # 디렉토리인 경우 확장/축소 처리
-                elif item and isinstance(metadata, dict) and metadata.get('is_dir', False):
-                    if self._is_branch_indicator_area(index, event.pos()) or (self._press_pos is not None and self.indexAt(self._press_pos) == index):
-                        # 폴더 확장/축소 수동 처리
-                        if self.isExpanded(index):
-                            self.collapse(index)
-                        else:
-                            self.expand(index)
-                        event.accept()
-                        self._press_pos = None
-                        return
-        
-        # 체크박스 클릭 처리
-        if self._checkbox_click_in_progress and self._is_checkbox_area(index, event.pos()):
-            # 체크박스 클릭 완료 - 기본 처리 호출 (체크박스 상태 변경)
-            super().mouseReleaseEvent(event)
+                current_state = model.data(index, Qt.CheckStateRole)
+                if current_state == Qt.Checked:
+                    new_state = Qt.Unchecked
+                else:
+                    new_state = Qt.Checked
+                model.setData(index, new_state, Qt.CheckStateRole)
             
             # 체크박스 클릭 시그널 발생
             self.checkbox_clicked.emit(index)
             
-            # 체크박스 클릭 플래그 초기화
-            self._checkbox_click_in_progress = False
-            
-            # 이벤트 소비
+            # 이벤트 소비 - 중요: 이후 처리가 일어나지 않도록 여기서 반환
             event.accept()
+            
+            # 플래그 초기화
+            self._checkbox_click_in_progress = False
+            self._press_pos = None
             return
+            
+        # 이미 체크박스 클릭 처리가 진행 중이었던 경우, 여기서 모든 처리를 중단
+        if self._checkbox_click_in_progress:
+            self._checkbox_click_in_progress = False
+            self._press_pos = None
+            event.accept()  # 이벤트 소비
+            return
+        
+        # 체크박스 클릭이 아닌 경우: 일반 아이템 클릭 처리
+        model = self.model()
+        if model:
+            item = model.itemFromIndex(index)
+            metadata = item.data(ITEM_DATA_ROLE) if item else None
+            
+            # 파일인 경우 - item_clicked 시그널 발생
+            if item and (not isinstance(metadata, dict) or not metadata.get('is_dir', False)):
+                self.item_clicked.emit(index)
+                event.accept()
+                self._press_pos = None
+                return
+            
+            # 디렉토리인 경우 - 확장/축소 처리
+            elif item and isinstance(metadata, dict) and metadata.get('is_dir', False):
+                if (self._is_branch_indicator_area(index, event.pos()) or 
+                    (self._press_pos is not None and self.indexAt(self._press_pos) == index)):
+                    # 폴더 확장/축소 수동 처리
+                    if self.isExpanded(index):
+                        self.collapse(index)
+                    else:
+                        self.expand(index)
+                    event.accept()
+                    self._press_pos = None
+                    return
         
         # 기본 마우스 릴리스 이벤트 처리
         super().mouseReleaseEvent(event)
         
-        # 클릭 위치 초기화
+        # 플래그 및 클릭 위치 초기화
+        self._checkbox_click_in_progress = False
         self._press_pos = None
     
     def mouseDoubleClickEvent(self, event):
