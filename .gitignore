@@ -58,3 +58,7 @@ memory-bank/
 
 # 앱 관련 특정 파일
 *.entitlements 
+
+dmg_source/
+
+.dmg
