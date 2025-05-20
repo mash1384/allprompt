@@ -1,1 +1,0 @@
-../../Resources/tiktoken/_educational.py
