@@ -18,9 +18,9 @@ This application allows you to select a code folder and include only the necessa
 
 ### Released Version (General Users)
 
-Download from [GitHub Releases](https://github.com/yourusername/allprompt/releases):
+Download from [GitHub Releases](https://github.com/mash1384/allprompt/releases):
 - **macOS**: Download and extract `allprompt.app.zip`
-- **Windows**: Run the `allprompt.exe` installer
+- **Windows**: not yet
 
 > **Note**: When first running on macOS, you may see an "unidentified developer" warning. Please allow it in System Preferences > Security & Privacy.
 
