@@ -136,6 +136,10 @@ class CustomTreeView(QTreeView):
     
     def mousePressEvent(self, event):
         """마우스 누름 이벤트 처리"""
+        # 디버깅을 위한 로그
+        logger.debug("마우스 누름 이벤트 시작: _checkbox_click_in_progress=%s, _press_pos=%s",
+                    self._checkbox_click_in_progress, self._press_pos)
+                    
         # 클릭 위치 저장
         self._press_pos = event.pos()
         index = self.indexAt(event.pos())
@@ -144,13 +148,19 @@ class CustomTreeView(QTreeView):
             # 체크박스 영역 확인
             is_checkbox_click = self._is_checkbox_area(index, event.pos())
             
-            if is_checkbox_click:
-                # 체크박스 클릭 진행 중 플래그 설정
-                self._checkbox_click_in_progress = True
-                # 중요: 체크박스 클릭 시 이벤트를 소비하여 다른 클릭 이벤트로 전파되지 않게 함
-                event.accept()
-                # 기본 이벤트 처리 제거 - 체크박스 클릭 시 폴더 접힘/펴짐 동작 방지
-                return
+            # 체크박스 클릭 영역 검증을 더 엄격하게
+            model = self.model()
+            if model:
+                item = model.itemFromIndex(index)
+                if item and is_checkbox_click:
+                    # 디버깅 로그 추가
+                    logger.debug("체크박스 클릭 영역 확인됨: %s", item.text() if hasattr(item, 'text') else "알 수 없음")
+                    # 체크박스 클릭 진행 중 플래그 설정
+                    self._checkbox_click_in_progress = True
+                    # 중요: 체크박스 클릭 시 이벤트를 소비하여 다른 클릭 이벤트로 전파되지 않게 함
+                    event.accept()
+                    # 기본 이벤트 처리 제거 - 체크박스 클릭 시 폴더 접힘/펴짐 동작 방지
+                    return
             
             # 체크박스 영역이 아닌 경우 기본 마우스 이벤트 처리
             super().mousePressEvent(event)
@@ -160,52 +170,75 @@ class CustomTreeView(QTreeView):
     
     def mouseReleaseEvent(self, event):
         """마우스 놓음 이벤트 처리"""
+        # 디버깅을 위한 로그
+        logger.debug("마우스 놓음 이벤트 시작: _checkbox_click_in_progress=%s, _press_pos=%s",
+                    self._checkbox_click_in_progress, self._press_pos)
+                    
         # 클릭한 인덱스 가져오기
         index = self.indexAt(event.pos())
         
         # 유효하지 않은 인덱스인 경우 기본 처리 후 종료
         if not index.isValid():
+            logger.debug("마우스 놓음 위치의 인덱스가 유효하지 않음")
             super().mouseReleaseEvent(event)
             self._checkbox_click_in_progress = False
             self._press_pos = None
             return
         
-        # 체크박스 클릭 플래그 우선 확인 (최우선 순위)
+        # 중요: 체크박스 클릭 진행 상황 확인 (가장 높은 우선순위)
         if self._checkbox_click_in_progress:
             # 현재 마우스 위치가 체크박스 영역인지 확인
             is_current_pos_checkbox = self._is_checkbox_area(index, event.pos())
+            logger.debug("체크박스 클릭 진행 중 - 현재 마우스 위치가 체크박스 영역인지: %s", is_current_pos_checkbox)
             
+            model = self.model()
+            item = model.itemFromIndex(index) if model else None
+            
+            # 아이템이 폴더인지 확인
+            is_folder = False
+            if item:
+                metadata = item.data(ITEM_DATA_ROLE)
+                is_folder = isinstance(metadata, dict) and metadata.get('is_dir', False)
+                logger.debug("아이템은 폴더인가: %s, 아이템: %s", is_folder, item.text() if hasattr(item, 'text') else "알 수 없음")
+            
+            # 폴더의 체크박스 클릭 처리를 명확히
             if is_current_pos_checkbox:
                 # 체크박스 상태 토글
-                model = self.model()
-                if model:
+                if model and item and item.isCheckable():
                     current_state = model.data(index, Qt.CheckStateRole)
-                    if current_state == Qt.Checked:
-                        new_state = Qt.Unchecked
-                    else:
-                        new_state = Qt.Checked
+                    new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+                    logger.debug("체크박스 상태 토글: %s -> %s", 
+                                "체크됨" if current_state == Qt.Checked else "체크 안됨",
+                                "체크 안됨" if current_state == Qt.Checked else "체크됨")
                     model.setData(index, new_state, Qt.CheckStateRole)
                 
                 # 체크박스 클릭 시그널 발생
                 self.checkbox_clicked.emit(index)
+                logger.debug("체크박스 클릭 시그널 발생")
                 
-                # 이벤트 소비
+                # 이벤트 소비 - 중요: 여기서 확실히 소비해야 폴더 확장/축소가 발생하지 않음
                 event.accept()
                 
                 # 플래그 초기화 및 즉시 반환
                 self._checkbox_click_in_progress = False
                 self._press_pos = None
+                logger.debug("체크박스 클릭 처리 완료: 플래그 초기화")
                 return
             else:
                 # 체크박스 영역 밖에서 마우스를 뗀 경우에도
                 # 폴더 확장/축소가 일어나지 않도록 처리
+                logger.debug("체크박스 클릭 진행 중이었으나 체크박스 영역 외부에서 마우스 뗌")
+                
+                # 중요: 이벤트를 확실히 소비하여 폴더 확장/축소 방지
                 event.accept()
                 self._checkbox_click_in_progress = False
                 self._press_pos = None
+                logger.debug("체크박스 클릭 처리 중단: 플래그 초기화")
                 return
         
         # 폴더 확장/축소 또는 일반 아이템 클릭 처리
         # (_checkbox_click_in_progress가 False인 경우에만 고려)
+        logger.debug("일반 클릭 처리 시작: 체크박스 클릭 진행 중 아님")
         model = self.model()
         if model:
             item = model.itemFromIndex(index)
@@ -213,6 +246,7 @@ class CustomTreeView(QTreeView):
             
             # 파일인 경우 - item_clicked 시그널 발생
             if item and (not isinstance(metadata, dict) or not metadata.get('is_dir', False)):
+                logger.debug("파일 항목 클릭: item_clicked 시그널 발생")
                 self.item_clicked.emit(index)
                 event.accept()
                 self._press_pos = None
@@ -220,36 +254,55 @@ class CustomTreeView(QTreeView):
             
             # 디렉토리인 경우 - 확장/축소 처리
             elif item and isinstance(metadata, dict) and metadata.get('is_dir', False):
-                is_current_pos_checkbox = self._is_checkbox_area(index, event.pos())
+                logger.debug("디렉토리 항목 확인: 확장/축소 조건 검사")
                 
-                # 체크박스 영역이 아닌 경우에만 폴더 확장/축소 고려
-                if not is_current_pos_checkbox:
-                    is_branch_area = self._is_branch_indicator_area(index, event.pos())
-                    press_index = self.indexAt(self._press_pos) if self._press_pos else None
+                # 체크박스 클릭 진행 중이 아닐 때만 폴더 확장/축소 검토
+                if not self._checkbox_click_in_progress:
+                    # 명시적으로 체크박스 영역이 아닌지 다시 확인 (추가 방어막)
+                    is_current_pos_checkbox = self._is_checkbox_area(index, event.pos())
                     
-                    # 브랜치 인디케이터 영역 클릭 또는
-                    # 브랜치 인디케이터 영역이 아닌 일반 아이템 영역 클릭 
-                    # (마우스 누른/뗀 위치가 같은 경우에만)
-                    if (is_branch_area or 
-                        (not is_branch_area and press_index == index)):
-                        # 폴더 확장/축소 수행
-                        if self.isExpanded(index):
-                            self.collapse(index)
-                        else:
-                            self.expand(index)
-                        event.accept()
-                        self._press_pos = None
-                        return
+                    # 체크박스 영역이 아닌 경우에만 폴더 확장/축소 고려
+                    if not is_current_pos_checkbox:
+                        is_branch_area = self._is_branch_indicator_area(index, event.pos())
+                        press_index = self.indexAt(self._press_pos) if self._press_pos else None
+                        
+                        logger.debug("확장/축소 조건 상태: 브랜치 영역=%s, 누른 위치와 뗀 위치 동일=%s", 
+                                    is_branch_area, press_index == index)
+                        
+                        # 브랜치 인디케이터 영역 클릭 또는
+                        # 브랜치 인디케이터 영역이 아닌 일반 아이템 영역 클릭 
+                        # (마우스 누른/뗀 위치가 같은 경우에만)
+                        if (is_branch_area or 
+                            (not is_branch_area and press_index == index)):
+                            # 폴더 확장/축소 수행
+                            if self.isExpanded(index):
+                                logger.debug("폴더 축소 수행")
+                                self.collapse(index)
+                            else:
+                                logger.debug("폴더 확장 수행")
+                                self.expand(index)
+                            event.accept()
+                            self._press_pos = None
+                            return
+                else:
+                    logger.debug("체크박스 클릭 진행 중이므로 폴더 확장/축소 취소")
         
         # 기본 마우스 릴리스 이벤트 처리
+        logger.debug("기본 마우스 릴리스 이벤트 처리로 진행")
         super().mouseReleaseEvent(event)
         
         # 플래그 및 클릭 위치 초기화
+        # 모든 처리 경로에서 마지막에 반드시 상태 플래그를 초기화
         self._checkbox_click_in_progress = False
         self._press_pos = None
+        logger.debug("마우스 릴리스 이벤트 완료: 플래그 초기화")
     
     def mouseDoubleClickEvent(self, event):
         """더블 클릭 이벤트 처리"""
+        # 디버깅을 위한 로그
+        logger.debug("더블 클릭 이벤트 발생: _checkbox_click_in_progress=%s, _press_pos=%s",
+                    self._checkbox_click_in_progress, self._press_pos)
+                    
         # 더블 클릭한 아이템의 인덱스 가져오기
         index = self.indexAt(event.pos())
         
@@ -257,6 +310,10 @@ class CustomTreeView(QTreeView):
             # 체크박스나 브랜치 인디케이터 영역인지 확인
             is_checkbox_area = self._is_checkbox_area(index, event.pos())
             is_branch_area = self._is_branch_indicator_area(index, event.pos())
+            
+            # 디버깅 로그 추가
+            logger.debug("더블 클릭 위치 확인: 체크박스 영역=%s, 브랜치 인디케이터 영역=%s",
+                         is_checkbox_area, is_branch_area)
             
             # 체크박스나 브랜치 인디케이터 영역이 아닌 경우에만 폴더 확장/축소 처리
             if not is_checkbox_area and not is_branch_area:
@@ -268,12 +325,30 @@ class CustomTreeView(QTreeView):
                     if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
                         # 폴더 확장/축소 수행
                         if self.isExpanded(index):
+                            logger.debug("폴더 축소 수행: %s", item.text() if item else "알 수 없음")
                             self.collapse(index)
                         else:
+                            logger.debug("폴더 확장 수행: %s", item.text() if item else "알 수 없음")
                             self.expand(index)
+                            
+                    # 파일 항목인 경우 - item_clicked 시그널 발생
+                    elif item and not metadata.get('is_dir', False):
+                        logger.debug("더블 클릭으로 파일 항목 클릭 발생: %s", item.text() if item else "알 수 없음")
+                        self.item_clicked.emit(index)
+            else:
+                # 체크박스 영역 더블 클릭 시 체크박스 상태 토글 없이 이벤트만 소비
+                if is_checkbox_area:
+                    logger.debug("체크박스 영역 더블 클릭: 폴더 확장/축소 동작 없음")
+                # 브랜치 인디케이터 영역 더블 클릭 시 이벤트만 소비
+                elif is_branch_area:
+                    logger.debug("브랜치 인디케이터 영역 더블 클릭: 폴더 확장/축소 동작 없음")
         
         # 이벤트 소비 (기본 처리 방지)
         event.accept()
+        
+        # 상태 플래그 명확히 초기화
+        self._checkbox_click_in_progress = False
+        self._press_pos = None
     
     # QTreeView의 기본 클릭 처리 방지
     def keyPressEvent(self, event):
@@ -332,12 +407,19 @@ class CustomTreeView(QTreeView):
             
         # 해당 인덱스에 체크 상태가 정의되어 있는지 확인
         # (체크 상태가 없으면 체크박스가 표시되지 않음)
-        if not model.data(index, Qt.CheckStateRole):
+        if model.data(index, Qt.CheckStateRole) is None:
             return False
             
         # 현재 아이템의 시각적 영역 가져오기
         item_visual_rect = self.visualRect(index)
         
+        # 아이템 정보 확인 (폴더 여부)
+        is_folder = False
+        item = model.itemFromIndex(index)
+        if item:
+            metadata = item.data(ITEM_DATA_ROLE)
+            is_folder = isinstance(metadata, dict) and metadata.get('is_dir', False)
+            
         # QStyleOptionViewItem 설정 - Qt 스타일링 시스템에서 사용
         style_option = QStyleOptionViewItem()
         style_option.initFrom(self)  # 현재 위젯에서 스타일 옵션 초기화
@@ -396,10 +478,28 @@ class CustomTreeView(QTreeView):
             
             # 체크박스 영역 생성
             checkbox_rect = QRect(checkbox_x, checkbox_y, checkbox_width, checkbox_height)
+        
+        # 사용자 클릭의 정확도를 높이기 위해 체크박스 영역을 확장
+        # 폴더 항목의 경우 더 넓은 영역을 제공하여 체크박스 접근성 향상
+        horizontal_padding = 5  # 기본 수평 패딩
+        vertical_padding = 5    # 기본 수직 패딩
+        
+        if is_folder:
+            # 폴더 항목은 체크박스 영역을 좀 더 넓게 설정
+            horizontal_padding = 8
+            vertical_padding = 8
             
-            # 사용자 클릭의 정확도를 높이기 위해 체크박스 영역을 약간 확장
-            # (작은 체크박스를 클릭하기 어려울 수 있으므로)
-            checkbox_rect.adjust(-2, -2, 2, 2)  # 좌, 상, 우, 하 방향으로 각각 2픽셀 확장
+        # 체크박스 영역 확장 적용
+        checkbox_rect.adjust(
+            -horizontal_padding,    # 좌측 확장
+            -vertical_padding,      # 상단 확장
+            horizontal_padding,     # 우측 확장
+            vertical_padding        # 하단 확장
+        )
+        
+        # 디버깅 로그 추가
+        logger.debug("체크박스 영역 계산: rect=%s, 마우스 위치=%s, 포함=%s, 폴더=%s", 
+                    checkbox_rect, pos, checkbox_rect.contains(pos), is_folder)
         
         # 마우스 위치가 체크박스 영역 내에 있는지 확인하여 결과 반환
         return checkbox_rect.contains(pos)
