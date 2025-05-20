@@ -136,12 +136,12 @@ class CustomTreeView(QTreeView):
         self._checkbox_click_in_progress = False
         # 루트 폴더 확장/축소 타임스탬프 (중복 입력 방지용)
         self._last_root_toggle_time = 0
-        # 디바운싱 시간 간격 (초 단위)
-        self._debounce_interval = 0.3
+        # 디바운싱 시간 간격 (초 단위) - 더 높은 값으로 설정하여 중복 처리 방지 강화
+        self._debounce_interval = 0.5
         # 루트 항목 확장/축소 처리 중 플래그
         self._root_expand_collapse_in_progress = False
         # 루트 항목 이벤트 완전 스토핑 플래그
-        self._stop_root_event_propagation = False
+        self._stop_root_event_propagation = True
     
     def mousePressEvent(self, event):
         """마우스 누름 이벤트 처리"""
@@ -153,11 +153,25 @@ class CustomTreeView(QTreeView):
         if index.isValid() and not index.parent().isValid():
             is_branch_area = self._is_branch_indicator_area(index, event.pos())
             if is_branch_area:
+                # 현재 시간 확인 - 디바운싱
+                current_time = time.time()
+                # 짧은 시간 내 중복 클릭 방지
+                if current_time - self._last_root_toggle_time < self._debounce_interval:
+                    logger.debug("루트 폴더 브랜치 영역 클릭 무시: 디바운싱 (%f초)", 
+                               current_time - self._last_root_toggle_time)
+                    # 이벤트 즉시 소비
+                    event.accept()
+                    return
+                
                 # 루트 브랜치 영역 클릭 시 플래그 설정
+                # 단, 상태 변경은 mouseReleaseEvent에서만 수행하도록 처리
                 self._root_expand_collapse_in_progress = True
-                # 이벤트 전파 중지 플래그 설정
+                # 기본 이벤트 처리가 중복으로 동작하는 것을 방지
                 self._stop_root_event_propagation = True
+                logger.debug("루트 폴더 브랜치 영역 클릭: 이벤트 플래그 설정")
+                # 이벤트 소비하여 Qt의 기본 확장/축소 동작 차단
                 event.accept()
+                # 부모 클래스의 mousePressEvent를 호출하지 않고 종료
                 return
         
         if index.isValid():
@@ -179,7 +193,7 @@ class CustomTreeView(QTreeView):
         index = self.indexAt(event.pos())
         
         try:
-            # 루트 항목 확장/축소 처리 중인 경우
+            # 루트 항목 확장/축소 처리 중인 경우 - 첫 번째 경로 (브랜치 영역 클릭 전용)
             if self._root_expand_collapse_in_progress and index.isValid() and not index.parent().isValid():
                 # 현재 시간 확인 - 디바운싱
                 current_time = time.time()
@@ -187,18 +201,42 @@ class CustomTreeView(QTreeView):
                     logger.debug("루트 폴더 디바운싱: 이벤트 무시 (%f초)", 
                                current_time - self._last_root_toggle_time)
                 else:
-                    # 명시적으로 확장/축소 직접 제어
+                    # 명시적으로 확장/축소 직접 제어 (이 시점에서는 _root_expand_collapse_in_progress가 True임)
                     self._last_root_toggle_time = current_time
-                    if self.isExpanded(index):
-                        logger.debug("루트 폴더 축소 직접 제어")
-                        self.collapse(index)
-                    else:
-                        logger.debug("루트 폴더 확장 직접 제어")
-                        self.expand(index)
+                    # 루트 노드의 확장/축소 상태 변경 전에 기존 상태 기록
+                    is_expanded = self.isExpanded(index)
+                    logger.debug("루트 폴더 %s 직접 제어", "축소" if is_expanded else "확장")
+                    
+                    # 일시적으로 _stop_root_event_propagation 플래그를 False로 설정하여
+                    # 중첩된 이벤트 처리를 방지하면서도 한 번의 확장/축소는 허용
+                    temp_value = False
+                    old_stop_flag = self._stop_root_event_propagation
+                    self._stop_root_event_propagation = temp_value
+                    
+                    try:
+                        # 확장/축소 수행
+                        if is_expanded:
+                            self.collapse(index)
+                        else:
+                            self.expand(index)
+                    finally:
+                        # 플래그 복원 - 항상 복원되도록 finally 블록 사용
+                        self._stop_root_event_propagation = old_stop_flag
                 
                 # 이벤트 완전히 소비 및 처리 완료
                 event.accept()
                 return
+                
+            # 추가: 루트 항목 영역 클릭일 경우 이벤트 전파 차단
+            # 이미 mouseReleaseEvent에서 root_expand_collapse_in_progress 플래그가 설정되지 않은 경우
+            # 브랜치 영역을 클릭했을 때 기본 이벤트 처리가 두 번 발생하는 것을 방지
+            if index.isValid() and not index.parent().isValid():
+                is_branch_area = self._is_branch_indicator_area(index, event.pos())
+                if is_branch_area:
+                    # 이미 처리된 이벤트라면 무시 (중복 실행 방지)
+                    logger.debug("루트 폴더 브랜치 영역 클릭: 브랜치 영역 이벤트 차단")
+                    event.accept()
+                    return
 
             # 유효하지 않은 인덱스인 경우 기본 처리 후 종료
             if not index.isValid():
@@ -244,7 +282,7 @@ class CustomTreeView(QTreeView):
                         event.accept()
                         return
                 
-                # 디렉토리인 경우 - 확장/축소 처리
+                # 디렉토리인 경우 - 확장/축소 처리 (두 번째 경로)
                 elif item and isinstance(metadata, dict) and metadata.get('is_dir', False):
                     is_branch_area = self._is_branch_indicator_area(index, event.pos())
                     press_index = self.indexAt(self._press_pos) if self._press_pos else None
@@ -252,36 +290,22 @@ class CustomTreeView(QTreeView):
                     # 루트 폴더인지 확인 (부모가 없는 경우)
                     is_root = not index.parent().isValid()
                     
-                    # 브랜치 인디케이터 영역 클릭 또는
-                    # (체크박스/브랜치 인디케이터가 아닌 영역에서 press/release가 동일 인덱스인 경우)
-                    if (is_branch_area or 
-                        (not is_branch_area and press_index == index and 
-                         not self._is_checkbox_area(index, event.pos()))):
-                        
-                        # 루트 폴더에 대한 특별 처리 - 디바운싱 적용
-                        if is_root:
-                            current_time = time.time()
-                            # 마지막 루트 토글 이후 충분한 시간이 지났는지 확인
-                            if current_time - self._last_root_toggle_time < self._debounce_interval:
-                                # 디바운싱 시간 내 중복 클릭은 무시
-                                logger.debug("루트 폴더 디바운싱: 이벤트 무시 (%f초)", 
-                                            current_time - self._last_root_toggle_time)
-                                event.accept()
-                                return
+                    # 루트 폴더는 이미 위에서 처리했으므로 여기서는 건너뜀
+                    # 하위 폴더만 처리
+                    if not is_root:
+                        # 브랜치 인디케이터 영역 클릭 또는
+                        # (체크박스/브랜치 인디케이터가 아닌 영역에서 press/release가 동일 인덱스인 경우)
+                        if (is_branch_area or 
+                            (not is_branch_area and press_index == index and 
+                             not self._is_checkbox_area(index, event.pos()))):
                             
-                            # 타임스탬프 업데이트
-                            self._last_root_toggle_time = current_time
-                            # 이벤트 전파 중지 플래그 설정
-                            self._stop_root_event_propagation = True
-                        
-                        # 폴더 확장/축소 수행
-                        if self.isExpanded(index):
-                            self.collapse(index)
-                        else:
-                            self.expand(index)
-                        event.accept()
-                        # 루트 폴더를 포함한 모든 디렉토리에서 이벤트가 확실히 소비되도록 here
-                        return
+                            # 폴더 확장/축소 수행
+                            if self.isExpanded(index):
+                                self.collapse(index)
+                            else:
+                                self.expand(index)
+                            event.accept()
+                            return
             
             # 어떤 조건에도 해당하지 않으면 기본 마우스 릴리스 이벤트 처리
             super().mouseReleaseEvent(event)
@@ -291,8 +315,9 @@ class CustomTreeView(QTreeView):
             self._checkbox_click_in_progress = False
             self._press_pos = None
             self._root_expand_collapse_in_progress = False
-            # 각 이벤트 처리 후 스토핑 플래그 초기화
-            self._stop_root_event_propagation = False
+            # 루트 항목 이벤트 스토핑 플래그는 항상 True로 복원
+            # (다음 클릭 전까지 중복 이벤트 처리를 방지)
+            self._stop_root_event_propagation = True
     
     def mouseDoubleClickEvent(self, event):
         """더블 클릭 이벤트 처리"""
@@ -552,8 +577,11 @@ class CustomTreeView(QTreeView):
         내부 확장/축소 상태 변경 메서드 오버라이드
         루트 항목의 경우 중복 처리를 방지
         """
-        # 루트 항목이고 이벤트 스토핑 플래그가 설정된 경우 중복 호출 방지
+        # 루트 항목에 대한 자동 확장/축소 시도 시 이를 차단
         if not index.parent().isValid() and self._stop_root_event_propagation:
+            # mouseReleaseEvent에서 직접 제어하는 경우는 허용
+            # 이미 mouseReleaseEvent에서 _stop_root_event_propagation 플래그를 
+            # 일시적으로 해제한 상태에서 호출하므로 여기서는 항상 차단됨
             logger.debug("루트 항목 확장/축소 요청 무시: _stop_root_event_propagation=%s", 
                         self._stop_root_event_propagation)
             return
