@@ -247,6 +247,7 @@ class RightPanelWidget(QWidget):
         self.folder_icon = folder_icon or QApplication.style().standardIcon(QStyle.SP_DirIcon)
         self.copy_icon = copy_icon or QApplication.style().standardIcon(QStyle.SP_FileIcon)
         self.clear_icon = clear_icon or QApplication.style().standardIcon(QStyle.SP_DialogCloseButton)
+        self.settings_icon = QApplication.style().standardIcon(QStyle.SP_FileDialogDetailedView)
         
         self._init_ui()
         logger.info("RightPanelWidget 생성 완료")
@@ -395,6 +396,16 @@ class RightPanelWidget(QWidget):
         self.clear_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.clear_button.setMinimumHeight(44)
         action_layout.addWidget(self.clear_button)
+        
+        # 설정 버튼
+        self.settings_button = QPushButton("Settings")
+        self.settings_button.setObjectName("settingsButton")
+        self.settings_button.setIcon(self.settings_icon)
+        self.settings_button.setIconSize(QSize(20, 20))
+        self.settings_button.setLayoutDirection(Qt.LeftToRight)
+        self.settings_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.settings_button.setMinimumHeight(44)
+        action_layout.addWidget(self.settings_button)
         
         right_panel_layout.addWidget(action_container)
         

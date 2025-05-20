@@ -215,46 +215,38 @@ def generate_full_output(
     # 이 변경은 main_window.py의 _copy_to_clipboard 호출부 수정이 반드시 필요함.
     selected_items_details: List[Dict[str, Any]],
     file_cache: Optional[Dict[str, str]] = None, # 현재 read_text_file에서 캐시 처리하므로 미사용 가능성
-    indent_size: int = 2
+    indent_size: int = 2,
+    copy_file_tree_only: bool = False # 파일트리만 복사할지 여부
 ) -> str:
     """
-    Generate complete output including both <file_map> and <file_contents>
+    전체 출력 형식 생성
     
     Args:
-        root_path: Root directory path of the project being scanned.
-        selected_items_details: List of dictionaries, each representing a selected item
-                                (file or directory). Each dict should contain at least
-                                'path' (absolute Path object), 'rel_path' (relative Path or str),
-                                and 'is_dir' (boolean).
-        file_cache: Optional cache for file contents. (Currently not directly used here if
-                    read_text_file handles its own caching or doesn't use an external cache.)
-        indent_size: Number of spaces for indentation in the file map.
+        root_path: 루트 디렉토리 경로
+        selected_items_details: 선택된 항목의 세부 정보 목록
+        file_cache: 파일 내용 캐시 (현재 미사용)
+        indent_size: 들여쓰기 크기
+        copy_file_tree_only: 파일트리만 복사할지 여부 (기본값: False)
         
     Returns:
-        String containing <file_map> and <file_contents> in sequence.
+        <file_map>과 <file_contents>를 포함한 전체 출력 문자열
     """
-    project_root = Path(root_path)
-
-    # <file_map> 생성: selected_items_details 전체를 사용 (파일 및 디렉토리 정보 포함)
-    # generate_file_map은 'rel_path', 'is_dir' 등을 포함하는 딕셔너리 리스트를 기대함.
-    file_map_str = generate_file_map(selected_items_details, project_root, indent_size)
+    # file_map 먼저 생성
+    output_parts = []
     
-    # <file_contents> 생성: selected_items_details에서 파일 정보만 필터링하여 전달
-    # generate_file_contents는 'path', 'rel_path' 등을 포함하는 파일 아이템 딕셔너리 리스트를 기대함.
-    file_items_for_contents = [
-        item for item in selected_items_details if not item.get('is_dir', True) and 'path' in item
-    ]
-    file_contents_str = generate_file_contents(file_items_for_contents, project_root)
+    # 항상 파일 맵 추가
+    file_map_str = generate_file_map(selected_items_details, root_path, indent_size)
+    output_parts.append(file_map_str)
+    output_parts.append("")  # 파일 맵과 파일 내용 사이 빈 줄
     
-    # 최종 결과 조합
-    final_output_str = f"{file_map_str}\n\n{file_contents_str}"
+    # 파일트리만 복사 옵션이 아닐 때만 파일 내용 추가
+    if not copy_file_tree_only:
+        # 파일만 필터링 - 디렉토리는 제외
+        file_items = [item for item in selected_items_details if not item.get('is_dir', False)]
+        
+        # 파일 내용 생성 및 추가
+        if file_items:
+            file_contents_str = generate_file_contents(file_items, root_path)
+            output_parts.append(file_contents_str)
     
-    # (디버깅 로그 - 이전 답변의 제안 유지)
-    logger.info(f"Generated full output length: {len(final_output_str)}")
-    if final_output_str:
-        log_preview = final_output_str[:500].replace('\n', '\\n') # 개행문자 이스케이프
-        logger.info(f"Generated full output (first 500 chars, newlines escaped): {log_preview}")
-    else:
-        logger.warning("Generated full output is empty!")
-    
-    return final_output_str
+    return "\n".join(output_parts)

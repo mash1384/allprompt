@@ -47,6 +47,8 @@ from src.utils.clipboard_utils import copy_to_clipboard
 from src.core.sort_utils import sort_items  # 정렬 유틸리티 임포트
 # 설정 관리자 임포트
 from src.utils.settings_manager import SettingsManager
+# 설정 다이얼로그 임포트
+from .settings_dialog import SettingsDialog
 # 상수 임포트
 from src.core.constants import EXTENSION_TO_LANGUAGE_MAP
 
@@ -89,8 +91,17 @@ class MainWindow(QMainWindow):
             image_file_icon=self.image_file_icon
         )
         
+        # 설정값을 컨트롤러에 적용
+        settings = self.settings_manager.get_all_settings()
+        self.file_tree_controller.show_hidden = settings.get("show_hidden_files", False)
+        self.file_tree_controller.apply_gitignore_rules = settings.get("apply_gitignore_rules", True)
+        
         # Initialize TokenController
         self.token_controller = TokenController(self)
+        
+        # 토크나이저 모델 설정 (TokenController에 set_model 메서드가 없으므로 제거)
+        # model_name = settings.get("model_name", "gpt-3.5-turbo")
+        # self.token_controller.set_model(model_name)
         
         # Initialize ActionController
         self.action_controller = ActionController()
@@ -284,6 +295,9 @@ class MainWindow(QMainWindow):
         # 클리어 버튼 클릭
         self.right_panel.clear_button.clicked.connect(self._clear_selection)
         
+        # 설정 버튼 클릭
+        self.right_panel.settings_button.clicked.connect(self._open_settings_dialog)
+        
         # 메뉴 옵션 이벤트 연결은 _create_menu에서 수행
         
         # 참고: 트리 뷰 확장/축소 및 클릭 이벤트는 LeftPanelWidget에서 자체적으로 처리됨
@@ -303,6 +317,12 @@ class MainWindow(QMainWindow):
         open_folder_action.triggered.connect(self._open_folder_dialog)
         file_menu.addAction(open_folder_action)
         
+        # 설정 액션
+        settings_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogDetailedView), "&Settings...", self)
+        settings_action.setShortcut("Ctrl+,")
+        settings_action.triggered.connect(self._open_settings_dialog)
+        file_menu.addAction(settings_action)
+        
         file_menu.addSeparator()
         
         # 종료 액션
@@ -314,17 +334,20 @@ class MainWindow(QMainWindow):
         # 뷰 메뉴
         view_menu = menubar.addMenu("&View")
         
+        # 현재 설정 가져오기
+        current_settings = self.settings_manager.get_all_settings()
+        
         # 숨김 파일 표시 토글
         self.show_hidden_action = QAction("Show &Hidden Files", self)
         self.show_hidden_action.setCheckable(True)
-        self.show_hidden_action.setChecked(self.file_tree_controller.get_show_hidden())
+        self.show_hidden_action.setChecked(current_settings.get("show_hidden_files", False))
         self.show_hidden_action.triggered.connect(self._toggle_hidden_files)
         view_menu.addAction(self.show_hidden_action)
         
         # .gitignore 필터 토글
         self.gitignore_filter_action = QAction("Apply &.gitignore Rules", self)
         self.gitignore_filter_action.setCheckable(True)
-        self.gitignore_filter_action.setChecked(self.file_tree_controller.get_apply_gitignore_rules())
+        self.gitignore_filter_action.setChecked(current_settings.get("apply_gitignore_rules", True))
         self.gitignore_filter_action.triggered.connect(self._toggle_gitignore_filter)
         view_menu.addAction(self.gitignore_filter_action)
         
@@ -335,7 +358,7 @@ class MainWindow(QMainWindow):
         about_action = QAction("&About", self)
         about_action.triggered.connect(self._show_about_dialog)
         help_menu.addAction(about_action)
-        
+    
     def _open_folder_dialog(self):
         """폴더 열기 대화상자 표시"""
         folder_path = QFileDialog.getExistingDirectory(
@@ -433,11 +456,15 @@ class MainWindow(QMainWindow):
             selected_item_paths = self.file_tree_controller.get_checked_items()
             total_tokens = self.token_controller.total_tokens
             
+            # 설정에서 파일트리만 복사 옵션 가져오기
+            copy_file_tree_only = self.settings_manager.get_setting("copy_file_tree_only", False)
+            
             # ActionController에 작업 위임
             self.action_controller.perform_copy_to_clipboard(
                 root_path, 
                 selected_item_paths, 
-                total_tokens
+                total_tokens,
+                copy_file_tree_only
             )
             
         except Exception as e:
@@ -461,7 +488,14 @@ class MainWindow(QMainWindow):
     def _toggle_hidden_files(self):
         """숨김 파일 표시 여부 토글"""
         logger.info("숨김 파일 표시 토글")
-        self.file_tree_controller.toggle_hidden_files()
+        
+        # 파일 트리 컨트롤러를 통해 토글
+        show_hidden = self.file_tree_controller.toggle_hidden_files()
+        
+        # 설정 업데이트 및 저장
+        self.settings_manager.set_setting("show_hidden_files", show_hidden)
+        self.settings_manager.save_settings()
+        
         # 현재 폴더 다시 로드 - FileTreeController에서 내부적으로 현재 폴더를 추적함
         if self.file_tree_controller.get_current_folder():
             self._load_folder(str(self.file_tree_controller.get_current_folder()))
@@ -469,10 +503,78 @@ class MainWindow(QMainWindow):
     def _toggle_gitignore_filter(self):
         """gitignore 필터링 토글"""
         logger.info(".gitignore 필터 토글")
-        self.file_tree_controller.toggle_gitignore_filter()
+        
+        # 파일 트리 컨트롤러를 통해 토글
+        apply_gitignore = self.file_tree_controller.toggle_gitignore_filter()
+        
+        # 설정 업데이트 및 저장
+        self.settings_manager.set_setting("apply_gitignore_rules", apply_gitignore)
+        self.settings_manager.save_settings()
+        
         # 현재 폴더 다시 로드 - FileTreeController에서 내부적으로 현재 폴더를 추적함
         if self.file_tree_controller.get_current_folder():
             self._load_folder(str(self.file_tree_controller.get_current_folder()))
+    
+    def _open_settings_dialog(self):
+        """설정 다이얼로그 표시"""
+        logger.info("설정 다이얼로그 열기")
+        
+        # 현재 설정 가져오기
+        current_settings = self.settings_manager.get_all_settings()
+        
+        # 설정 다이얼로그 생성
+        dialog = SettingsDialog(
+            parent=self,
+            current_settings=current_settings
+        )
+        
+        # 설정 변경 시그널 연결
+        dialog.settings_changed.connect(self._apply_settings)
+        
+        # 다이얼로그 표시
+        dialog.exec()
+
+    def _apply_settings(self, new_settings):
+        """
+        설정 변경 적용
+        
+        Args:
+            new_settings: 새로운 설정 딕셔너리
+        """
+        logger.info(f"설정 변경 적용: {new_settings}")
+        
+        # 이전 설정 가져오기
+        old_settings = self.settings_manager.get_all_settings()
+        
+        # 설정 업데이트
+        self.settings_manager.update_settings(new_settings)
+        self.settings_manager.save_settings()
+        
+        # 숨김 파일 표시 설정 변경 처리
+        if old_settings.get("show_hidden_files") != new_settings.get("show_hidden_files"):
+            logger.info(f"숨김 파일 표시 설정 변경: {new_settings.get('show_hidden_files')}")
+            self.file_tree_controller.show_hidden = new_settings.get("show_hidden_files")
+            self.show_hidden_action.setChecked(new_settings.get("show_hidden_files"))
+        
+        # gitignore 필터링 설정 변경 처리
+        if old_settings.get("apply_gitignore_rules") != new_settings.get("apply_gitignore_rules"):
+            logger.info(f".gitignore 필터링 설정 변경: {new_settings.get('apply_gitignore_rules')}")
+            self.file_tree_controller.apply_gitignore_rules = new_settings.get("apply_gitignore_rules")
+            self.gitignore_filter_action.setChecked(new_settings.get("apply_gitignore_rules"))
+        
+        # 파일트리만 복사 설정 변경 처리
+        if old_settings.get("copy_file_tree_only") != new_settings.get("copy_file_tree_only"):
+            logger.info(f"파일트리만 복사 설정 변경: {new_settings.get('copy_file_tree_only')}")
+            # 이 설정은 복사할 때 적용되므로 여기서는 저장만 하고 실제 적용은 복사 시 처리
+        
+        # 현재 폴더가 로드되어 있으면 다시 스캔하여 설정 적용
+        if (old_settings.get("show_hidden_files") != new_settings.get("show_hidden_files") or
+            old_settings.get("apply_gitignore_rules") != new_settings.get("apply_gitignore_rules")) and \
+            self.file_tree_controller.get_current_folder():
+            self._load_folder(str(self.file_tree_controller.get_current_folder()))
+        
+        # 상태 메시지 표시
+        self.statusBar().showMessage("설정이 저장되었습니다.", 3000)
     
     def _center_window(self):
         """윈도우를 화면 중앙에 위치시킴"""

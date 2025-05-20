@@ -31,9 +31,10 @@ class SettingsManager:
         
         # 기본 설정값
         self.default_settings = {
-            "model_name": "gpt-3.5-turbo",
             "show_hidden_files": False,
             "follow_symlinks": False,
+            "apply_gitignore_rules": True,
+            "copy_file_tree_only": False,
             "last_directory": str(Path.home()),
         }
         

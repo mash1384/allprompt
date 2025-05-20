@@ -15,8 +15,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-from src.core.tokenizer import Tokenizer
-
 logger = logging.getLogger(__name__)
 
 class SettingsDialog(QDialog):
@@ -25,13 +23,11 @@ class SettingsDialog(QDialog):
     # 설정 변경 시그널
     settings_changed = Signal(dict)
     
-    def __init__(self, available_models=None, current_model=None, parent=None, current_settings=None):
+    def __init__(self, parent=None, current_settings=None):
         """
         설정 다이얼로그 초기화
         
         Args:
-            available_models: 사용 가능한 모델 목록
-            current_model: 현재 선택된 모델
             parent: 부모 위젯
             current_settings: 현재 설정 값 딕셔너리
         """
@@ -40,20 +36,16 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("설정")
         self.setMinimumWidth(400)
         
-        self.available_models = available_models or []
-        self.current_model = current_model
-        
         # 기본 설정값
         self.default_settings = {
-            "model_name": "gpt-3.5-turbo",
             "show_hidden_files": False,
             "follow_symlinks": False,
+            "apply_gitignore_rules": True,
+            "copy_file_tree_only": False,
         }
         
         # 현재 설정값
         self.current_settings = current_settings or self.default_settings.copy()
-        if current_model:
-            self.current_settings["model_name"] = current_model
         
         # UI 초기화
         self._init_ui()
@@ -64,32 +56,6 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(16)
-        
-        # ===== 토큰화 모델 설정 그룹 =====
-        model_group = QGroupBox("토큰화 모델 설정")
-        model_layout = QFormLayout(model_group)
-        model_layout.setContentsMargins(12, 20, 12, 12)
-        model_layout.setSpacing(10)
-        
-        # 모델 선택 콤보 박스
-        self.model_combo = QComboBox()
-        
-        # 사용 가능한 모델 목록 설정
-        if self.available_models:
-            self.model_combo.addItems(self.available_models)
-        else:
-            # 기존 코드는 유지 (백업용)
-            tokenizer = Tokenizer()
-            available_models = tokenizer.get_available_models()
-            self.model_combo.addItems(available_models)
-        
-        # 현재 설정값으로 콤보 박스 설정
-        current_model = self.current_settings.get("model_name")
-        if current_model in [self.model_combo.itemText(i) for i in range(self.model_combo.count())]:
-            self.model_combo.setCurrentText(current_model)
-        
-        model_layout.addRow("토큰화 모델:", self.model_combo)
-        layout.addWidget(model_group)
         
         # ===== 파일 스캔 설정 그룹 =====
         scan_group = QGroupBox("파일 스캔 설정")
@@ -107,7 +73,27 @@ class SettingsDialog(QDialog):
         self.follow_symlinks_cb.setChecked(self.current_settings.get("follow_symlinks", False))
         scan_layout.addWidget(self.follow_symlinks_cb)
         
+        # .gitignore 규칙 적용 체크박스
+        self.apply_gitignore_rules_cb = QCheckBox(".gitignore 규칙 적용")
+        self.apply_gitignore_rules_cb.setChecked(self.current_settings.get("apply_gitignore_rules", True))
+        self.apply_gitignore_rules_cb.setToolTip(".gitignore 파일에 정의된 규칙에 따라 파일 필터링")
+        scan_layout.addWidget(self.apply_gitignore_rules_cb)
+        
         layout.addWidget(scan_group)
+        
+        # ===== 출력 설정 그룹 =====
+        output_group = QGroupBox("출력 설정")
+        output_layout = QVBoxLayout(output_group)
+        output_layout.setContentsMargins(12, 20, 12, 12)
+        output_layout.setSpacing(10)
+        
+        # 파일트리만 복사 체크박스
+        self.copy_file_tree_only_cb = QCheckBox("파일트리만 복사 (파일 내용 제외)")
+        self.copy_file_tree_only_cb.setChecked(self.current_settings.get("copy_file_tree_only", False))
+        self.copy_file_tree_only_cb.setToolTip("체크하면 파일 내용 없이 파일 구조만 복사합니다.")
+        output_layout.addWidget(self.copy_file_tree_only_cb)
+        
+        layout.addWidget(output_group)
         
         # ===== 버튼 영역 =====
         button_layout = QHBoxLayout()
@@ -140,20 +126,19 @@ class SettingsDialog(QDialog):
     
     def _reset_to_defaults(self):
         """설정을 기본값으로 복원"""
-        # 모델 선택 콤보 박스
-        if self.default_settings["model_name"] in [self.model_combo.itemText(i) for i in range(self.model_combo.count())]:
-            self.model_combo.setCurrentText(self.default_settings["model_name"])
-        
         # 체크박스
         self.show_hidden_files_cb.setChecked(self.default_settings["show_hidden_files"])
         self.follow_symlinks_cb.setChecked(self.default_settings["follow_symlinks"])
+        self.apply_gitignore_rules_cb.setChecked(self.default_settings["apply_gitignore_rules"])
+        self.copy_file_tree_only_cb.setChecked(self.default_settings["copy_file_tree_only"])
     
     def _save_settings(self):
         """설정 저장 및 변경 시그널 발생"""
         settings = {
-            "model_name": self.model_combo.currentText(),
             "show_hidden_files": self.show_hidden_files_cb.isChecked(),
             "follow_symlinks": self.follow_symlinks_cb.isChecked(),
+            "apply_gitignore_rules": self.apply_gitignore_rules_cb.isChecked(),
+            "copy_file_tree_only": self.copy_file_tree_only_cb.isChecked(),
         }
         
         # 설정이 변경되었는지 확인
@@ -171,8 +156,4 @@ class SettingsDialog(QDialog):
         Returns:
             현재 설정값 딕셔너리
         """
-        return self.current_settings
-
-    def get_selected_model(self):
-        """선택된 모델 반환"""
-        return self.model_combo.currentText() 
+        return self.current_settings 

@@ -33,7 +33,7 @@ class ActionController(QObject):
         """ActionController 초기화"""
         super().__init__()
     
-    def perform_copy_to_clipboard(self, root_path, selected_item_details, total_tokens):
+    def perform_copy_to_clipboard(self, root_path, selected_item_details, total_tokens, copy_file_tree_only=False):
         """
         선택된 파일 내용을 클립보드에 복사하는 액션 수행
         
@@ -41,6 +41,7 @@ class ActionController(QObject):
             root_path: 프로젝트 루트 경로
             selected_item_details: 선택된 항목의 세부 정보 목록
             total_tokens: 총 토큰 수
+            copy_file_tree_only: 파일트리만 복사할지 여부 (기본값: False)
             
         Returns:
             복사 성공 여부 (boolean)
@@ -66,16 +67,17 @@ class ActionController(QObject):
             for file_path in text_files:
                 path_str = str(file_path)
                 
-                # 파일 읽기
-                content = read_text_file(file_path)
+                # 파일 읽기 (파일트리만 복사 옵션이 아닐 때만)
+                if not copy_file_tree_only:
+                    content = read_text_file(file_path)
+                    
+                    # 오류 정보가 포함된 딕셔너리인 경우 처리
+                    if isinstance(content, dict) and 'error' in content:
+                        error_msg = f"{file_path} 파일을 읽는 중 오류가 발생했습니다: {content['error']}"
+                        self.copy_status_signal.emit(False, error_msg)
+                        continue
                 
-                # 오류 정보가 포함된 딕셔너리인 경우 처리
-                if isinstance(content, dict) and 'error' in content:
-                    error_msg = f"{file_path} 파일을 읽는 중 오류가 발생했습니다: {content['error']}"
-                    self.copy_status_signal.emit(False, error_msg)
-                    continue
-                
-                # 파일 내용 추가
+                # 파일 항목 추가
                 rel_path = file_path.relative_to(root_path)
                 items_details.append({
                     'path': file_path,
@@ -87,14 +89,17 @@ class ActionController(QObject):
             # 클립보드에 복사
             if items_details:
                 # 전체 출력 생성
-                formatted_text = generate_full_output(root_path, items_details)
+                formatted_text = generate_full_output(root_path, items_details, copy_file_tree_only=copy_file_tree_only)
                 
                 # 클립보드에 복사
                 success = copy_to_clipboard(formatted_text)
                 
                 if success:
                     # 복사 성공 메시지
-                    success_msg = f"Copied {total_files} files ({total_tokens:,} tokens) to clipboard"
+                    if copy_file_tree_only:
+                        success_msg = f"Copied file tree of {total_files} files to clipboard (file contents excluded)"
+                    else:
+                        success_msg = f"Copied {total_files} files ({total_tokens:,} tokens) to clipboard"
                     self.copy_status_signal.emit(True, success_msg)
                     logger.info(success_msg)
                     return True
