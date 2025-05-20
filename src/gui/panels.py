@@ -216,19 +216,11 @@ class LeftPanelWidget(QWidget):
             # 체크 상태 토글 (UI는 즉시 반응)
             current_state = item.checkState()
             
-            if temporarily_disconnect:
-                # 시그널 일시 해제로 빠른 처리
-                self.tree_model.blockSignals(True)
-                
             # 체크 상태 변경
             if current_state == Qt.Checked:
                 item.setCheckState(Qt.Unchecked)
             else:
                 item.setCheckState(Qt.Checked)
-                
-            if temporarily_disconnect:
-                # 시그널 다시 연결
-                self.tree_model.blockSignals(False)
                 
             # 토큰 계산을 위한 시그널은 별도로 0ms 지연 실행
             QTimer.singleShot(0, lambda: None)

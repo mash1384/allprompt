@@ -358,9 +358,13 @@ class FileTreeController(QObject):
                     self.checked_items
                 ))
             else:
-                # 디렉토리인 경우 기존 로직대로 처리
-                # 2. 하위 항목도 같은 상태로 설정
-                self._set_item_checked_state(item, checked)
+                # 디렉토리인 경우 자식 아이템에만 상태 전파
+                # 현재 아이템은 이미 체크 상태가 변경되어 있으므로 자식 아이템에만 적용
+                row_count = item.rowCount()
+                for row in range(row_count):
+                    child_item = item.child(row)
+                    if child_item and child_item.isCheckable() and child_item.isEnabled():
+                        self._set_item_checked_state(child_item, checked)
                 
                 # 3. 부모 폴더의 체크 상태 업데이트
                 self._update_parent_checked_state(item)
