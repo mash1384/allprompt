@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QTreeView, QStyledItemDelegate, QStyleOptionViewItem, QStyle, 
     QApplication, QProxyStyle
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex, QEvent, QRect, QPoint
+from PySide6.QtCore import Qt, Signal, QModelIndex, QEvent, QRect, QPoint, QTimer
 from PySide6.QtGui import QPainter, QCursor, QStandardItemModel, QStandardItem
 
 from src.gui.constants import ITEM_DATA_ROLE
@@ -136,39 +136,81 @@ class CustomTreeView(QTreeView):
         self._checkbox_click_in_progress = False
         # 루트 폴더 확장/축소 타임스탬프 (중복 입력 방지용)
         self._last_root_toggle_time = 0
-        # 디바운싱 시간 간격 (초 단위) - 더 높은 값으로 설정하여 중복 처리 방지 강화
-        self._debounce_interval = 0.5
-        # 루트 항목 확장/축소 처리 중 플래그
-        self._root_expand_collapse_in_progress = False
-        # 루트 항목 이벤트 완전 스토핑 플래그
-        self._stop_root_event_propagation = True
+        # 디바운싱 시간 간격 (초 단위)
+        self._debounce_interval = 0.8
+        # 이벤트 처리 잠금 시간 (절대적인 잠금 시간)
+        self._root_event_lock_until = 0
+        # _setExpanded 메서드 호출 보호를 위한 잠금 시간
+        self._setExpanded_lock_until = 0
+        # 루트 항목 이벤트 완전 무시 모드
+        self._hard_event_block = False
+        
+        # 시그널 연결: 트리 뷰의 expanded/collapsed 시그널을 내부 슬롯에 연결
+        self.expanded.connect(self._handle_expanded)
+        self.collapsed.connect(self._handle_collapsed)
+        
+        # 하드 블로킹 해제 타이머
+        self._hard_block_timer = QTimer(self)
+        self._hard_block_timer.setSingleShot(True)
+        self._hard_block_timer.timeout.connect(self._reset_hard_block)
     
+    def _reset_hard_block(self):
+        """하드 블로킹 모드 해제"""
+        logger.debug("하드 블로킹 모드 해제")
+        self._hard_event_block = False
+
+    def _perform_folder_toggle(self, index, is_root=False):
+        """
+        하위 폴더 확장/축소 작업을 수행하는 메서드
+        (루트 폴더는 mouseReleaseEvent에서 직접 처리)
+        
+        Args:
+            index: 처리할 아이템의 모델 인덱스
+            is_root: 루트 폴더 여부 (루트 폴더는 무시됨)
+        """
+        # 루트 폴더는 더 이상 이 메서드로 처리하지 않음
+        if is_root:
+            logger.debug("루트 폴더는 _perform_folder_toggle을 통해 처리되지 않음")
+            return
+            
+        # 현재 확장 상태 확인
+        is_expanded = self.isExpanded(index)
+        
+        # 하위 폴더 - 단순 처리
+        logger.debug("하위 폴더 %s 수행", "확장" if not is_expanded else "축소")
+        if is_expanded:
+            self.collapse(index)
+        else:
+            self.expand(index)
+
     def mousePressEvent(self, event):
         """마우스 누름 이벤트 처리"""
         # 클릭 위치 저장
         self._press_pos = event.pos()
         index = self.indexAt(event.pos())
         
+        # 현재 시간 확인
+        current_time = time.time()
+        
+        # 하드 블로킹 확인 - 루트 폴더에 대한 모든 이벤트 무시
+        if self._hard_event_block and index.isValid() and not index.parent().isValid():
+            logger.debug("하드 블로킹 모드: 루트 폴더 마우스 이벤트 무시")
+            event.accept()
+            return
+        
+        # 이벤트 잠금 상태 확인 - 잠금 기간 내라면 모든 클릭 무시
+        if current_time < self._root_event_lock_until:
+            logger.debug("이벤트 잠금 기간: 클릭 무시 (남은 시간: %f초)", 
+                        self._root_event_lock_until - current_time)
+            event.accept()
+            return
+        
         # 루트 항목이고 브랜치 인디케이터 영역인 경우 특별 처리
         if index.isValid() and not index.parent().isValid():
             is_branch_area = self._is_branch_indicator_area(index, event.pos())
             if is_branch_area:
-                # 현재 시간 확인 - 디바운싱
-                current_time = time.time()
-                # 짧은 시간 내 중복 클릭 방지
-                if current_time - self._last_root_toggle_time < self._debounce_interval:
-                    logger.debug("루트 폴더 브랜치 영역 클릭 무시: 디바운싱 (%f초)", 
-                               current_time - self._last_root_toggle_time)
-                    # 이벤트 즉시 소비
-                    event.accept()
-                    return
-                
-                # 루트 브랜치 영역 클릭 시 플래그 설정
-                # 단, 상태 변경은 mouseReleaseEvent에서만 수행하도록 처리
-                self._root_expand_collapse_in_progress = True
-                # 기본 이벤트 처리가 중복으로 동작하는 것을 방지
-                self._stop_root_event_propagation = True
-                logger.debug("루트 폴더 브랜치 영역 클릭: 이벤트 플래그 설정")
+                # 클릭 위치 및 인덱스 정보만 저장 (단순화)
+                logger.debug("루트 폴더 브랜치 영역 클릭: 위치 정보 저장")
                 # 이벤트 소비하여 Qt의 기본 확장/축소 동작 차단
                 event.accept()
                 # 부모 클래스의 mousePressEvent를 호출하지 않고 종료
@@ -192,51 +234,53 @@ class CustomTreeView(QTreeView):
         # 클릭한 인덱스 가져오기
         index = self.indexAt(event.pos())
         
+        # 현재 시간 확인
+        current_time = time.time()
+        
+        # 이벤트 잠금 상태 확인 - 잠금 기간 내라면 이벤트 무시
+        if current_time < self._root_event_lock_until:
+            logger.debug("이벤트 잠금 기간: 마우스 릴리즈 무시 (남은 시간: %f초)", 
+                          self._root_event_lock_until - current_time)
+            event.accept()
+            return
+        
         try:
-            # 루트 항목 확장/축소 처리 중인 경우 - 첫 번째 경로 (브랜치 영역 클릭 전용)
-            if self._root_expand_collapse_in_progress and index.isValid() and not index.parent().isValid():
-                # 현재 시간 확인 - 디바운싱
-                current_time = time.time()
-                if current_time - self._last_root_toggle_time < self._debounce_interval:
-                    logger.debug("루트 폴더 디바운싱: 이벤트 무시 (%f초)", 
-                               current_time - self._last_root_toggle_time)
-                else:
-                    # 명시적으로 확장/축소 직접 제어 (이 시점에서는 _root_expand_collapse_in_progress가 True임)
-                    self._last_root_toggle_time = current_time
-                    # 루트 노드의 확장/축소 상태 변경 전에 기존 상태 기록
-                    is_expanded = self.isExpanded(index)
-                    logger.debug("루트 폴더 %s 직접 제어", "축소" if is_expanded else "확장")
-                    
-                    # 일시적으로 _stop_root_event_propagation 플래그를 False로 설정하여
-                    # 중첩된 이벤트 처리를 방지하면서도 한 번의 확장/축소는 허용
-                    temp_value = False
-                    old_stop_flag = self._stop_root_event_propagation
-                    self._stop_root_event_propagation = temp_value
-                    
-                    try:
-                        # 확장/축소 수행
-                        if is_expanded:
+            # 루트 항목 클릭 처리
+            if (index.isValid() and not index.parent().isValid() and self._press_pos):
+                # 클릭 시작과 릴리즈가 같은 인덱스에 있는지 확인
+                press_index = self.indexAt(self._press_pos)
+                if press_index == index:
+                    # 브랜치 인디케이터 영역인지 확인
+                    is_branch_area = self._is_branch_indicator_area(index, event.pos())
+                    if is_branch_area:
+                        # 디바운싱 체크 - 짧은 시간 내 중복 호출 방지
+                        if current_time - self._last_root_toggle_time < self._debounce_interval:
+                            logger.debug("루트 폴더 토글 무시: 디바운싱 (%f초)", 
+                                        current_time - self._last_root_toggle_time)
+                            event.accept()
+                            return
+                        
+                        # 마지막 토글 시간 갱신
+                        self._last_root_toggle_time = current_time
+                        
+                        # _setExpanded 메서드 호출 시 보호할 쿨다운 설정 (200ms)
+                        self._setExpanded_lock_until = current_time + 0.2
+                        
+                        # 하드 블로킹 모드 활성화 - 후속 이벤트 차단
+                        self._hard_event_block = True
+                        self._hard_block_timer.start(int(self._debounce_interval * 1000))
+                        
+                        logger.debug("루트 폴더 %s 명시적 제어", "확장" if not self.isExpanded(index) else "축소")
+                        
+                        # 확장/축소 상태 명시적 변경
+                        if self.isExpanded(index):
                             self.collapse(index)
                         else:
                             self.expand(index)
-                    finally:
-                        # 플래그 복원 - 항상 복원되도록 finally 블록 사용
-                        self._stop_root_event_propagation = old_stop_flag
-                
-                # 이벤트 완전히 소비 및 처리 완료
-                event.accept()
-                return
-                
-            # 추가: 루트 항목 영역 클릭일 경우 이벤트 전파 차단
-            # 이미 mouseReleaseEvent에서 root_expand_collapse_in_progress 플래그가 설정되지 않은 경우
-            # 브랜치 영역을 클릭했을 때 기본 이벤트 처리가 두 번 발생하는 것을 방지
-            if index.isValid() and not index.parent().isValid():
-                is_branch_area = self._is_branch_indicator_area(index, event.pos())
-                if is_branch_area:
-                    # 이미 처리된 이벤트라면 무시 (중복 실행 방지)
-                    logger.debug("루트 폴더 브랜치 영역 클릭: 브랜치 영역 이벤트 차단")
-                    event.accept()
-                    return
+                        
+                        # 이벤트 소비
+                        event.accept()
+                        return
 
             # 유효하지 않은 인덱스인 경우 기본 처리 후 종료
             if not index.isValid():
@@ -282,7 +326,7 @@ class CustomTreeView(QTreeView):
                         event.accept()
                         return
                 
-                # 디렉토리인 경우 - 확장/축소 처리 (두 번째 경로)
+                # 디렉토리인 경우 - 확장/축소 처리
                 elif item and isinstance(metadata, dict) and metadata.get('is_dir', False):
                     is_branch_area = self._is_branch_indicator_area(index, event.pos())
                     press_index = self.indexAt(self._press_pos) if self._press_pos else None
@@ -290,22 +334,15 @@ class CustomTreeView(QTreeView):
                     # 루트 폴더인지 확인 (부모가 없는 경우)
                     is_root = not index.parent().isValid()
                     
-                    # 루트 폴더는 이미 위에서 처리했으므로 여기서는 건너뜀
-                    # 하위 폴더만 처리
-                    if not is_root:
-                        # 브랜치 인디케이터 영역 클릭 또는
-                        # (체크박스/브랜치 인디케이터가 아닌 영역에서 press/release가 동일 인덱스인 경우)
-                        if (is_branch_area or 
-                            (not is_branch_area and press_index == index and 
-                             not self._is_checkbox_area(index, event.pos()))):
-                            
-                            # 폴더 확장/축소 수행
-                            if self.isExpanded(index):
-                                self.collapse(index)
-                            else:
-                                self.expand(index)
+                    # 루트 폴더와 하위 폴더 모두 통합 메서드로 처리
+                    if is_branch_area or (not is_branch_area and press_index == index and 
+                                         not self._is_checkbox_area(index, event.pos())):
+                        # 하위 폴더만 통합 메서드로 폴더 토글 처리
+                        if not is_root:
+                            self._perform_folder_toggle(index, is_root=False)
                             event.accept()
                             return
+                        # 루트 폴더는 이미 상단에서 처리됨
             
             # 어떤 조건에도 해당하지 않으면 기본 마우스 릴리스 이벤트 처리
             super().mouseReleaseEvent(event)
@@ -314,103 +351,57 @@ class CustomTreeView(QTreeView):
             # 항상 플래그 및 클릭 위치 초기화
             self._checkbox_click_in_progress = False
             self._press_pos = None
-            self._root_expand_collapse_in_progress = False
-            # 루트 항목 이벤트 스토핑 플래그는 항상 True로 복원
-            # (다음 클릭 전까지 중복 이벤트 처리를 방지)
-            self._stop_root_event_propagation = True
+
+    def _handle_expanded(self, index):
+        """
+        트리 항목 확장 시 호출되는 핸들러
+        루트 항목 확장 시 추가 제어 수행
+        """
+        # 하드 블로킹 모드 확인 (루트 항목인 경우)
+        if index.isValid() and not index.parent().isValid() and self._hard_event_block:
+            logger.debug("루트 항목 확장 이벤트 - 하드 블로킹으로 인한 무시")
+            return
     
-    def mouseDoubleClickEvent(self, event):
-        """더블 클릭 이벤트 처리"""
-        # 디버깅을 위한 로그
-        logger.debug("더블 클릭 이벤트 발생: _checkbox_click_in_progress=%s, _press_pos=%s",
-                    self._checkbox_click_in_progress, self._press_pos)
-                    
-        # 더블 클릭한 아이템의 인덱스 가져오기
-        index = self.indexAt(event.pos())
-        
-        if index.isValid():
-            # 체크박스나 브랜치 인디케이터 영역인지 확인
-            is_checkbox_area = self._is_checkbox_area(index, event.pos())
-            is_branch_area = self._is_branch_indicator_area(index, event.pos())
+    def _handle_collapsed(self, index):
+        """
+        트리 항목 축소 시 호출되는 핸들러
+        루트 항목 축소 시 추가 제어 수행
+        """
+        # 하드 블로킹 모드 확인 (루트 항목인 경우)
+        if index.isValid() and not index.parent().isValid() and self._hard_event_block:
+            logger.debug("루트 항목 축소 이벤트 - 하드 블로킹으로 인한 무시")
+            return
+
+    def _setExpanded(self, index, expanded):
+        """
+        내부 확장/축소 상태 변경 메서드 오버라이드
+        루트 항목의 경우 중복 처리를 방지
+        """
+        # 루트 항목 확인
+        if not index.parent().isValid():
+            # 현재 시간 확인
+            current_time = time.time()
             
-            # 디버깅 로그 추가
-            logger.debug("더블 클릭 위치 확인: 체크박스 영역=%s, 브랜치 인디케이터 영역=%s",
-                         is_checkbox_area, is_branch_area)
-            
-            # 체크박스나 브랜치 인디케이터 영역이 아닌 경우에만 폴더 확장/축소 처리
-            if not is_checkbox_area and not is_branch_area:
-                # 모델에서 해당 아이템이 디렉토리인지 확인
-                model = self.model()
-                if model:
-                    item = model.itemFromIndex(index)
-                    metadata = item.data(ITEM_DATA_ROLE) if item else None
-                    if item and isinstance(metadata, dict) and metadata.get('is_dir', False):  # 디렉토리인 경우
-                        # 폴더 확장/축소 수행
-                        if self.isExpanded(index):
-                            logger.debug("폴더 축소 수행: %s", item.text() if item else "알 수 없음")
-                            self.collapse(index)
-                        else:
-                            logger.debug("폴더 확장 수행: %s", item.text() if item else "알 수 없음")
-                            self.expand(index)
-                            
-                    # 파일 항목인 경우 - item_clicked 시그널 발생
-                    elif item and not metadata.get('is_dir', False):
-                        logger.debug("더블 클릭으로 파일 항목 클릭 발생: %s", item.text() if item else "알 수 없음")
-                        self.item_clicked.emit(index)
-            else:
-                # 체크박스 영역 더블 클릭 시 체크박스 상태 토글 없이 이벤트만 소비
-                if is_checkbox_area:
-                    logger.debug("체크박스 영역 더블 클릭: 폴더 확장/축소 동작 없음")
-                # 브랜치 인디케이터 영역 더블 클릭 시 이벤트만 소비
-                elif is_branch_area:
-                    logger.debug("브랜치 인디케이터 영역 더블 클릭: 폴더 확장/축소 동작 없음")
-        
-        # 이벤트 소비 (기본 처리 방지)
-        event.accept()
-        
-        # 상태 플래그 명확히 초기화
-        self._checkbox_click_in_progress = False
-        self._press_pos = None
-    
-    # QTreeView의 기본 클릭 처리 방지
-    def keyPressEvent(self, event):
-        """키 입력 이벤트 처리"""
-        # 확장/축소와 관련된 키는 직접 처리 
-        # (Enter, Return, Right, Left 등의 키)
-        key = event.key()
-        current_index = self.currentIndex()
-        
-        if current_index.isValid():
-            # 모델에서 현재 항목이 디렉토리인지 확인
-            model = self.model()
-            if model:
-                item = model.itemFromIndex(current_index)
-                metadata = item.data(ITEM_DATA_ROLE) if item else None
-                is_directory = item and isinstance(metadata, dict) and metadata.get('is_dir', False)
+            # _setExpanded 잠금 시간 내에 있는지 확인
+            if current_time < self._setExpanded_lock_until:
+                logger.debug("루트 항목 _setExpanded - 쿨다운 기간 내 호출 무시 (%f초 남음)",
+                            self._setExpanded_lock_until - current_time)
+                return
                 
-                if key in (Qt.Key_Right, Qt.Key_Enter, Qt.Key_Return):
-                    # 폴더인 경우에만 확장 처리
-                    if is_directory:
-                        if not self.isExpanded(current_index):
-                            self.expand(current_index)
-                            event.accept()
-                            return
-                    # 폴더가 아닌 경우 Enter/Return은 항목 클릭으로 처리
-                    elif key in (Qt.Key_Enter, Qt.Key_Return):
-                        self.item_clicked.emit(current_index)
-                        event.accept()
-                        return
-                elif key == Qt.Key_Left:
-                    # 폴더인 경우에만 축소 처리
-                    if is_directory:
-                        if self.isExpanded(current_index):
-                            self.collapse(current_index)
-                            event.accept()
-                            return
+            # 하드 블로킹 모드 확인
+            if self._hard_event_block:
+                logger.debug("루트 항목 _setExpanded - 하드 블로킹으로 인한 무시")
+                return
+            
+            # 이벤트 잠금 시간 내에 있는지 확인
+            if current_time < self._root_event_lock_until:
+                logger.debug("루트 항목 _setExpanded - 잠금 기간 내 요청 차단 (%f초 남음)",
+                            self._root_event_lock_until - current_time)
+                return
         
-        # 나머지 키 이벤트는 기본 처리
-        super().keyPressEvent(event)
-    
+        # 루트 항목이 아니거나, 명시적 처리가 필요한 경우 기본 처리 호출
+        super()._setExpanded(index, expanded)
+
     def _is_checkbox_area(self, index, pos):
         """
         주어진 위치(pos)가 해당 아이템(index)의 체크박스 영역 내에 있는지 확인하는 메소드
@@ -571,20 +562,139 @@ class CustomTreeView(QTreeView):
         # 마우스 위치가 브랜치 인디케이터 영역 내에 있는지 확인하여 결과 반환
         return branch_indicator_rect.contains(pos)
 
-    # QTreeView의 내부 메서드 오버라이드 - 항목 확장/축소 직접 제어
-    def _setExpanded(self, index, expanded):
-        """
-        내부 확장/축소 상태 변경 메서드 오버라이드
-        루트 항목의 경우 중복 처리를 방지
-        """
-        # 루트 항목에 대한 자동 확장/축소 시도 시 이를 차단
-        if not index.parent().isValid() and self._stop_root_event_propagation:
-            # mouseReleaseEvent에서 직접 제어하는 경우는 허용
-            # 이미 mouseReleaseEvent에서 _stop_root_event_propagation 플래그를 
-            # 일시적으로 해제한 상태에서 호출하므로 여기서는 항상 차단됨
-            logger.debug("루트 항목 확장/축소 요청 무시: _stop_root_event_propagation=%s", 
-                        self._stop_root_event_propagation)
+    def mouseDoubleClickEvent(self, event):
+        """더블 클릭 이벤트 처리"""
+        # 디버깅을 위한 로그
+        logger.debug("더블 클릭 이벤트 발생")
+                    
+        # 더블 클릭한 아이템의 인덱스 가져오기
+        index = self.indexAt(event.pos())
+        
+        # 현재 시간 확인
+        current_time = time.time()
+        
+        # 이벤트 잠금 상태 확인 - 잠금 기간 내라면 이벤트 무시
+        if current_time < self._root_event_lock_until:
+            logger.debug("이벤트 잠금 기간: 더블 클릭 무시 (남은 시간: %f초)", 
+                       self._root_event_lock_until - current_time)
+            event.accept()
             return
+        
+        if index.isValid():
+            # 체크박스나 브랜치 인디케이터 영역인지 확인
+            is_checkbox_area = self._is_checkbox_area(index, event.pos())
+            is_branch_area = self._is_branch_indicator_area(index, event.pos())
             
-        # 기본 처리 호출
-        super()._setExpanded(index, expanded) 
+            # 디버깅 로그 추가
+            logger.debug("더블 클릭 위치 확인: 체크박스 영역=%s, 브랜치 인디케이터 영역=%s",
+                         is_checkbox_area, is_branch_area)
+            
+            # 체크박스나 브랜치 인디케이터 영역이 아닌 경우에만 폴더 확장/축소 처리
+            if not is_checkbox_area and not is_branch_area:
+                # 모델에서 해당 아이템이 디렉토리인지 확인
+                model = self.model()
+                if model:
+                    item = model.itemFromIndex(index)
+                    metadata = item.data(ITEM_DATA_ROLE) if item else None
+                    
+                    # 디렉토리인 경우 - 통합 메서드로 처리
+                    if item and isinstance(metadata, dict) and metadata.get('is_dir', False):
+                        # 루트 폴더인지 확인
+                        is_root = not index.parent().isValid()
+                        # 통합 메서드로 폴더 토글 처리
+                        self._perform_folder_toggle(index, is_root=is_root)
+                            
+                    # 파일 항목인 경우 - item_clicked 시그널 발생
+                    elif item and not metadata.get('is_dir', False):
+                        logger.debug("더블 클릭으로 파일 항목 클릭 발생: %s", item.text() if item else "알 수 없음")
+                        self.item_clicked.emit(index)
+            else:
+                # 체크박스 영역 더블 클릭 시 체크박스 상태 토글 없이 이벤트만 소비
+                if is_checkbox_area:
+                    logger.debug("체크박스 영역 더블 클릭: 폴더 확장/축소 동작 없음")
+                # 브랜치 인디케이터 영역 더블 클릭 시 이벤트만 소비
+                elif is_branch_area:
+                    logger.debug("브랜치 인디케이터 영역 더블 클릭: 폴더 확장/축소 동작 없음")
+        
+        # 이벤트 소비 (기본 처리 방지)
+        event.accept()
+        
+        # 상태 플래그 명확히 초기화
+        self._checkbox_click_in_progress = False
+        self._press_pos = None
+    
+    # QTreeView의 기본 클릭 처리 방지
+    def keyPressEvent(self, event):
+        """키 입력 이벤트 처리"""
+        # 확장/축소와 관련된 키는 직접 처리 
+        # (Enter, Return, Right, Left 등의 키)
+        key = event.key()
+        current_index = self.currentIndex()
+        
+        # 현재 시간 확인
+        current_time = time.time()
+        
+        # 이벤트 잠금 상태 확인 - 잠금 기간 내라면 이벤트 무시 (루트 항목인 경우)
+        if (current_time < self._root_event_lock_until and 
+            current_index.isValid() and 
+            not current_index.parent().isValid()):
+            logger.debug("이벤트 잠금 기간: 키 입력 무시 (남은 시간: %f초)", 
+                        self._root_event_lock_until - current_time)
+            event.accept()
+            return
+        
+        if current_index.isValid():
+            # 모델에서 현재 항목이 디렉토리인지 확인
+            model = self.model()
+            if model:
+                item = model.itemFromIndex(current_index)
+                metadata = item.data(ITEM_DATA_ROLE) if item else None
+                is_directory = item and isinstance(metadata, dict) and metadata.get('is_dir', False)
+                
+                # 루트 폴더인지 확인
+                is_root = not current_index.parent().isValid()
+                
+                if key in (Qt.Key_Right, Qt.Key_Enter, Qt.Key_Return):
+                    # 폴더인 경우에만 확장 처리
+                    if is_directory:
+                        if not self.isExpanded(current_index):
+                            # 통합 메서드로 폴더 확장 처리
+                            self._perform_folder_toggle(current_index, is_root=is_root)
+                            event.accept()
+                            return
+                    # 폴더가 아닌 경우 Enter/Return은 항목 클릭으로 처리
+                    elif key in (Qt.Key_Enter, Qt.Key_Return):
+                        self.item_clicked.emit(current_index)
+                        event.accept()
+                        return
+                elif key == Qt.Key_Left:
+                    # 폴더인 경우에만 축소 처리
+                    if is_directory:
+                        if self.isExpanded(current_index):
+                            # 통합 메서드로 폴더 축소 처리
+                            self._perform_folder_toggle(current_index, is_root=is_root)
+                            event.accept()
+                            return
+        
+        # 나머지 키 이벤트는 기본 처리
+        super().keyPressEvent(event)
+
+    def event(self, event):
+        """기본 이벤트 처리 메서드 오버라이드"""
+        # 하드 블로킹 상태에서는 루트 항목 관련 이벤트 무시
+        if self._hard_event_block:
+            if event.type() in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease, 
+                               QEvent.MouseButtonDblClick, QEvent.MouseMove):
+                # 마우스 이벤트일 경우만 추가 검사
+                pos = event.pos()
+                index = self.indexAt(pos)
+                if index.isValid() and not index.parent().isValid():
+                    # 루트 항목에 대한 이벤트면 무시
+                    is_branch_area = self._is_branch_indicator_area(index, pos)
+                    if is_branch_area:
+                        logger.debug("하드 블로킹: 루트 항목 기본 이벤트 무시: %s", event.type())
+                        event.accept()
+                        return True
+        
+        # 기본 이벤트 처리
+        return super().event(event) 
