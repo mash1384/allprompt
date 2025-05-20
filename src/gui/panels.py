@@ -73,9 +73,17 @@ class LeftPanelWidget(QWidget):
         self.tree_model = QStandardItemModel()
         self.tree_model.setHorizontalHeaderLabels(["Files/Folders"])
         
+        # 트리 뷰 컨테이너 생성 - 둥근 모서리와 배경 스타일링을 위한 컨테이너
+        tree_container = QWidget()
+        tree_container.setObjectName("treeContainer")
+        tree_container_layout = QVBoxLayout(tree_container)
+        tree_container_layout.setContentsMargins(0, 0, 0, 0)
+        tree_container_layout.setSpacing(0)
+        
         # 파일 트리 뷰 - 커스텀 트리 뷰 사용
         logger.info("트리 뷰 초기화")
         self.tree_view = CustomTreeView()
+        self.tree_view.setObjectName("fileTreeView")
         self.tree_view.setSelectionMode(QTreeView.NoSelection)
         self.tree_view.setAlternatingRowColors(False)
         self.tree_view.setUniformRowHeights(True)
@@ -106,8 +114,11 @@ class LeftPanelWidget(QWidget):
         self.checkable_delegate = CheckableItemDelegate()
         self.tree_view.setItemDelegate(self.checkable_delegate)
         
-        # 트리 뷰를 레이아웃에 추가
-        left_panel_layout.addWidget(self.tree_view)
+        # 트리 뷰를 컨테이너에 추가
+        tree_container_layout.addWidget(self.tree_view)
+        
+        # 트리 컨테이너를 레이아웃에 추가
+        left_panel_layout.addWidget(tree_container)
         logger.info("트리 뷰 레이아웃에 추가 완료")
     
     def set_tree_model(self, model):
@@ -278,8 +289,8 @@ class RightPanelWidget(QWidget):
         self.open_folder_button.setIcon(self.folder_icon)
         # 버튼 크기 정책 설정 - 너비 채우기
         self.open_folder_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.open_folder_button.setMinimumHeight(40)  # 버튼 높이 미니멀하게 수정
-        self.open_folder_button.setIconSize(QSize(18, 18))  # 아이콘 크기 축소
+        self.open_folder_button.setMinimumHeight(34)  # 버튼 높이 더 타이트하게 수정
+        self.open_folder_button.setIconSize(QSize(16, 16))  # 아이콘 크기 축소
         folder_layout.addWidget(self.open_folder_button)
         
         # 현재 폴더 경로를 표시할 수평 레이아웃
@@ -378,12 +389,12 @@ class RightPanelWidget(QWidget):
         # 복사 버튼을 위한 문서 아이콘 사용
         self.copy_button.setIcon(self.copy_icon)
         # 아이콘 설정
-        self.copy_button.setIconSize(QSize(18, 18))
+        self.copy_button.setIconSize(QSize(16, 16))
         self.copy_button.setLayoutDirection(Qt.LeftToRight)
         self.copy_button.setEnabled(False)  # 초기에 비활성화
         # 복사 버튼 크기 정책
         self.copy_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.copy_button.setMinimumHeight(40)
+        self.copy_button.setMinimumHeight(34)
         action_layout.addWidget(self.copy_button)
         
         # 선택 지우기 버튼
@@ -391,21 +402,21 @@ class RightPanelWidget(QWidget):
         self.clear_button.setObjectName("clearButton")
         # 클리어 버튼을 위한 X 아이콘 사용
         self.clear_button.setIcon(self.clear_icon)
-        self.clear_button.setIconSize(QSize(18, 18))
+        self.clear_button.setIconSize(QSize(16, 16))
         self.clear_button.setLayoutDirection(Qt.LeftToRight)
         self.clear_button.setEnabled(False)  # 초기에 비활성화
         self.clear_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.clear_button.setMinimumHeight(40)
+        self.clear_button.setMinimumHeight(34)
         action_layout.addWidget(self.clear_button)
         
         # 설정 버튼
         self.settings_button = QPushButton("Settings")
         self.settings_button.setObjectName("settingsButton")
         self.settings_button.setIcon(self.settings_icon)
-        self.settings_button.setIconSize(QSize(18, 18))
+        self.settings_button.setIconSize(QSize(16, 16))
         self.settings_button.setLayoutDirection(Qt.LeftToRight)
         self.settings_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.settings_button.setMinimumHeight(40)
+        self.settings_button.setMinimumHeight(34)
         action_layout.addWidget(self.settings_button)
         
         right_panel_layout.addWidget(action_container)
@@ -433,6 +444,24 @@ class RightPanelWidget(QWidget):
         self.selected_files_count.setText(file_count_str)
         self.total_tokens_count.setText(token_count_str)
         
+        # 토큰 수 숫자로 변환 (콤마 제거 후 정수로 변환)
+        try:
+            # 콤마가 포함된 숫자 문자열을 정수로 변환
+            token_count = int(token_count_str.replace(',', ''))
+            
+            # 토큰 수가 100,000을 넘으면 warning 속성 설정
+            if token_count > 100000:
+                self.total_tokens_count.setProperty("warning", True)
+            else:
+                self.total_tokens_count.setProperty("warning", False)
+                
+            # 스타일시트 적용 갱신을 위해 필요
+            self.total_tokens_count.style().unpolish(self.total_tokens_count)
+            self.total_tokens_count.style().polish(self.total_tokens_count)
+        except ValueError:
+            # 숫자로 변환할 수 없는 경우 (예: 빈 문자열 등)
+            self.total_tokens_count.setProperty("warning", False)
+            
     def set_buttons_enabled(self, copy_enabled, clear_enabled):
         """
         버튼 활성화 상태 설정

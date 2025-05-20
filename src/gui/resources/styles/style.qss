@@ -70,6 +70,15 @@ QWidget#leftPanel, QWidget#rightPanel {
     border: none;
     margin: 4px;
     padding: 15px;
+    border-radius: 14px;
+}
+
+/* 트리 컨테이너 스타일 */
+QWidget#treeContainer {
+    background-color: #202021;
+    border-radius: 12px;
+    padding: 5px;
+    border: 1px solid rgba(60, 60, 60, 0.1);
 }
 
 /* 패널 헤더 스타일 */
@@ -184,19 +193,19 @@ QPushButton#settingsButton {
     background-color: rgba(30, 30, 30, 0.55); 
     color: #FFFFFF;
     border: 0.5px solid #444444;
-    border-radius: 8px;
-    padding: 6px 12px;
+    border-radius: 12px;
+    padding: 4px 10px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
     font-weight: 500;
     letter-spacing: 0.5px;
-    min-height: 36px;
+    min-height: 32px;
     text-align: left;
     icon-size: 16px;
     margin: 1px 0px;
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
 QPushButton#openFolderButton:hover,
@@ -206,7 +215,7 @@ QPushButton#settingsButton:hover {
     background-color: rgba(60, 60, 60, 0.65);
     border: 0.5px solid #444444;
     transition: background-color 0.2s, border-color 0.2s;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
 }
 
 QPushButton#openFolderButton:pressed,
@@ -215,10 +224,10 @@ QPushButton#clearButton:pressed,
 QPushButton#settingsButton:pressed {
     background-color: rgba(25, 25, 25, 0.7);
     border: 0.5px solid #444444;
-    padding-top: 7px;
-    padding-left: 13px;
-    padding-bottom: 5px;
-    padding-right: 11px;
+    padding-top: 5px;
+    padding-left: 11px;
+    padding-bottom: 3px;
+    padding-right: 9px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
@@ -235,17 +244,17 @@ QPushButton#settingsButton:disabled {
 /* 복사 버튼 - 강조 버튼 */
 QPushButton#copyButton {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                stop:0 rgba(25, 118, 210, 0.65), stop:1 rgba(13, 71, 161, 0.65));
+                               stop:0 rgba(56, 56, 56, 0.65), stop:1 rgba(42, 42, 42, 0.65));
 }
 
 QPushButton#copyButton:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 rgba(30, 136, 229, 0.75), stop:1 rgba(21, 101, 192, 0.75));
+                               stop:0 rgba(64, 64, 64, 0.75), stop:1 rgba(52, 52, 52, 0.75));
 }
 
 QPushButton#copyButton:pressed {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                               stop:0 rgba(13, 71, 161, 0.75), stop:1 rgba(21, 101, 192, 0.75));
+                               stop:0 rgba(42, 42, 42, 0.75), stop:1 rgba(52, 52, 52, 0.75));
 }
 
 /* Clear 버튼 - 경고 버튼 */
@@ -384,12 +393,19 @@ QPushButton[iconButton="true"]:pressed {
 
 /* 트리 뷰 스타일 */
 QTreeView {
-    background-color: #252526;
-    alternate-background-color: #252526;
+    background-color: #202021;
+    alternate-background-color: #202021;
     border: none;
+    border-radius: 10px;
     outline: none;
     selection-background-color: transparent;
     selection-color: #D0D0D0;
+}
+
+/* 파일 트리 뷰 특정 스타일 */
+QTreeView#fileTreeView {
+    padding: 5px;
+    background-color: transparent;
 }
 
 QTreeView::item {
@@ -399,15 +415,16 @@ QTreeView::item {
 }
 
 QTreeView::item:hover {
-    background-color: transparent;
-    border: 1px solid #CCCCCC;
-    border-radius: 3px;
+    background-color: rgba(60, 60, 60, 0.3);
+    border: 1px solid #444444;
+    border-radius: 6px;
 }
 
 QTreeView::item:selected, QTreeView::item:selected:active {
-    background-color: transparent;
-    color: #D0D0D0;
-    border: none;
+    background-color: rgba(0, 122, 204, 0.15);
+    color: #FFFFFF;
+    border: 1px solid rgba(0, 122, 204, 0.2);
+    border-radius: 6px;
 }
 
 QTreeView::branch {
@@ -628,20 +645,20 @@ QLabel#pathLabel {
 
 /* 스크롤바 스타일 */
 QScrollBar:vertical {
-    background-color: #1E1E1E;
-    width: 8px;
-    margin: 0px;
+    background-color: #202021;
+    width: 7px;
+    margin: 2px 2px 2px 2px;
     border-radius: 4px;
 }
 
 QScrollBar::handle:vertical {
-    background-color: #5D5D5D;
+    background-color: #444444;
     min-height: 30px;
-    border-radius: 4px;
+    border-radius: 3.5px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background-color: #7A7A7A;
+    background-color: #666666;
 }
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
@@ -653,20 +670,20 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 }
 
 QScrollBar:horizontal {
-    background-color: #1E1E1E;
-    height: 8px;
-    margin: 0px;
+    background-color: #202021;
+    height: 7px;
+    margin: 2px 2px 2px 2px;
     border-radius: 4px;
 }
 
 QScrollBar::handle:horizontal {
-    background-color: #5D5D5D;
+    background-color: #444444;
     min-width: 30px;
-    border-radius: 4px;
+    border-radius: 3.5px;
 }
 
 QScrollBar::handle:horizontal:hover {
-    background-color: #7A7A7A;
+    background-color: #666666;
 }
 
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
@@ -675,6 +692,23 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
 
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
     background: none;
+}
+
+/* 파일 트리 전용 스크롤바 */
+QTreeView#fileTreeView QScrollBar:vertical {
+    background-color: transparent;
+    width: 6px;
+    margin: 2px 2px 2px 2px;
+}
+
+QTreeView#fileTreeView QScrollBar::handle:vertical {
+    background-color: #444444;
+    min-height: 30px;
+    border-radius: 3px;
+}
+
+QTreeView#fileTreeView QScrollBar::handle:vertical:hover {
+    background-color: #666666;
 }
 
 /* 상태 표시줄 스타일 */
@@ -745,8 +779,12 @@ QLabel[infoValue="true"] {
 }
 
 /* 특정 값(예: 토큰)에 다른 색상을 주려면 ID나 다른 속성으로 구분 */
-QLabel#total_tokens_count { /* 예시 ID */
-    color: #007ACC; /* 강조색 */
+QLabel#total_tokens_count { /* 토큰 수 레이블 - 기본적으로 일반 텍스트 색상 사용(셀렉티드 파일과 동일) */
+    color: #D0D0D0; /* 기본 텍스트 색상으로 변경 - 셀렉티드 파일 숫자와 동일 */
+}
+
+QLabel#total_tokens_count[warning="true"] { /* 높은 토큰 수를 경고 색상으로 표시 */
+    color: #DDB100; /* 주황색 경고 색상 */
 }
 
 /* 알림 레이블 스타일 */
@@ -809,10 +847,8 @@ QProgressBar::chunk {
 
 /* 모달 대화 상자 스타일 */
 QDialog {
-    background-color: #252526;
-    border: none;
-    border-radius: 3px;
-    padding: 4px;
+    background-color: #1E1E1E;
+    border-radius: 10px;
 }
 
 QDialog QLabel {
@@ -1078,4 +1114,96 @@ QFrame[frameShape="5"] { /* VLine */
     border: none;
     max-width: 1px;
     max-height: 1px;
+}
+
+/* Settings Dialog Specific Styles */
+QDialog {
+    background-color: #1E1E1E;
+    border-radius: 10px;
+}
+
+/* Settings Groups */
+QGroupBox#settingsGroup {
+    background-color: #1E1E1E;
+    border-radius: 8px;
+    border: 1px solid #333333;
+    margin-top: 12px;
+    font-weight: medium;
+}
+
+QGroupBox#settingsGroup::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 6px 10px;
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: medium;
+}
+
+/* Settings Checkboxes */
+QCheckBox#settingsCheckbox {
+    spacing: 8px;
+    color: #D0D0D0;
+    padding: 4px;
+}
+
+QCheckBox#settingsCheckbox::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid #555555;
+    background-color: #1E1E1E;
+}
+
+QCheckBox#settingsCheckbox::indicator:checked {
+    background-color: #007ACC;
+    border: 1px solid #007ACC;
+    image: url(:/icons/check.svg);
+}
+
+QCheckBox#settingsCheckbox::indicator:unchecked:hover {
+    border: 1px solid #007ACC;
+}
+
+/* Settings Dialog Buttons */
+QPushButton#resetButton, QPushButton#cancelButton, QPushButton#saveButton {
+    min-height: 24px;
+    min-width: 80px;
+    border-radius: 4px;
+    font-weight: medium;
+    padding: 4px 12px;
+}
+
+QPushButton#resetButton {
+    background-color: rgba(40, 40, 40, 0.55);
+    color: #D0D0D0;
+    border: 0.5px solid #444444;
+}
+
+QPushButton#resetButton:hover {
+    background-color: rgba(52, 52, 52, 0.65);
+}
+
+QPushButton#cancelButton {
+    background-color: rgba(40, 40, 40, 0.55);
+    color: #D0D0D0;
+    border: 0.5px solid #444444;
+}
+
+QPushButton#cancelButton:hover {
+    background-color: rgba(52, 52, 52, 0.65);
+}
+
+QPushButton#saveButton {
+    background-color: #007ACC;
+    color: #FFFFFF;
+    border: none;
+}
+
+QPushButton#saveButton:hover {
+    background-color: #1B90E0;
+}
+
+QPushButton#saveButton:pressed {
+    background-color: #005A9E;
 } 
