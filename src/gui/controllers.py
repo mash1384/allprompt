@@ -351,6 +351,9 @@ class FileTreeController(QObject):
                 else:
                     self.checked_files = max(0, self.checked_files - 1)
                 
+                # 부모 폴더의 체크 상태 업데이트 (파일 항목도 부모 체크 상태에 영향을 줌)
+                self._update_parent_checked_state(item)
+                
                 # UI 업데이트를 위한 시그널만 지연 발생
                 QTimer.singleShot(0, lambda: self.selection_changed_signal.emit(
                     self.checked_files, 
@@ -426,7 +429,30 @@ class FileTreeController(QObject):
         parent = item.parent()
         if not parent:
             return  # 루트 아이템이면 패스
+            
+        # 먼저 현재 아이템이 파일인지 확인
+        item_path = self._get_item_path(item)
+        is_file = item_path and item_path.is_file() if item_path else False
         
+        if is_file and item.checkState() == Qt.Checked:
+            # 파일이 체크된 경우, 상위 폴더들은 모두 부분 체크 상태로 설정
+            current_state = parent.checkState()
+            
+            if current_state != Qt.PartiallyChecked:
+                # 부모 상태 업데이트 - 반드시 부분 체크 상태로
+                parent.setCheckState(Qt.PartiallyChecked)
+                
+                # 부모 경로 업데이트
+                parent_path = self._get_item_path(parent)
+                if parent_path:
+                    path_str = str(parent_path)
+                    self.checked_items.discard(path_str)  # 완전 체크된 상태가 아니므로 목록에서 제외
+                
+                # 재귀적으로 상위 부모도 부분 체크 상태로 업데이트
+                self._update_parent_checked_state(parent)
+            return
+        
+        # 파일이 아니거나 체크되지 않은 경우 기존 로직 적용
         # 부모의 모든 자식 상태 확인
         all_checked = True
         any_checked = False
@@ -437,9 +463,23 @@ class FileTreeController(QObject):
             child = parent.child(row)
             if child and child.isCheckable() and child.isEnabled():
                 has_children = True
-                if child.checkState() == Qt.Checked:
+                child_state = child.checkState()
+                
+                # 파일 항목이 하나라도 있으면 체크
+                child_path = self._get_item_path(child)
+                is_child_file = child_path and child_path.is_file() if child_path else False
+                
+                if child_state == Qt.Checked:
                     any_checked = True
-                else:
+                    # 만약 자식 중에 파일이 포함되어 있다면 부모는 항상 부분 체크 상태
+                    if is_child_file:
+                        all_checked = False  # 부모가 PartiallyChecked가 되도록 강제
+                        break
+                elif child_state == Qt.PartiallyChecked:
+                    any_checked = True
+                    all_checked = False
+                    break
+                else:  # Unchecked
                     all_checked = False
                 
                 if any_checked and not all_checked:
