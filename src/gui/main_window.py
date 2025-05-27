@@ -695,8 +695,12 @@ class MainWindow(QMainWindow):
         # 트리 모델을 좌측 패널에 설정
         self.left_panel.set_tree_model(model)
         
-        # 트리 뷰 모델 변경 후에는 트리 뷰 스크롤 위치 초기화
+        # 트리 뷰에 컨트롤러 참조 설정
         tree_view = self.left_panel.get_tree_view()
+        if hasattr(tree_view, 'set_controller'):
+            tree_view.set_controller(self.file_tree_controller)
+        
+        # 트리 뷰 모델 변경 후에는 트리 뷰 스크롤 위치 초기화
         tree_view.scrollToTop()
     
     def _handle_copy_status(self, success: bool, message: str):

@@ -80,6 +80,13 @@ class FileTreeController(QObject):
         # 시그널 연결 플래그
         self._processing_check_event = False
         
+        # 폴더 축소/확장 시 상태 보존을 위한 백업
+        self._state_backup = {
+            'checked_items': set(),
+            'checked_files': 0,
+            'checked_dirs': 0
+        }
+        
         # 트리 모델 시그널 연결
         self.tree_model.itemChanged.connect(self.handle_item_change)
         
@@ -194,6 +201,9 @@ class FileTreeController(QObject):
             except Exception:
                 # 연결된 시그널이 없는 경우 무시
                 pass
+
+        # 기존 체크 상태 백업 (복원용)
+        previous_checked_items = self.checked_items.copy()
         
         # 기존 트리 모델 초기화
         self.tree_model.clear()
@@ -293,6 +303,9 @@ class FileTreeController(QObject):
             # 아이템을 부모에 추가
             parent_item.appendRow(item)
             item_dict[str(rel_path)] = item
+
+        # 이전 체크 상태 복원
+        self._restore_checked_states(previous_checked_items, item_dict)
         
         # 시그널 다시 연결
         self.tree_model.itemChanged.connect(self.handle_item_change)
@@ -301,6 +314,102 @@ class FileTreeController(QObject):
         
         # 모델 업데이트 시그널 발생
         self.model_updated_signal.emit(self.tree_model)
+    
+    def _restore_checked_states(self, previous_checked_items: set, item_dict: Dict[str, QStandardItem]):
+        """
+        이전에 체크되었던 항목들의 상태를 복원
+        
+        Args:
+            previous_checked_items: 이전에 체크되었던 항목들의 경로 집합
+            item_dict: 경로를 키로 하는 아이템 사전
+        """
+        if not previous_checked_items:
+            return
+            
+        logger.debug(f"체크 상태 복원 시작: {len(previous_checked_items)}개 항목")
+        
+        # 복원된 항목 수 카운트
+        restored_count = 0
+        
+        # 절대 경로를 키로 하는 추가 사전 생성 (빠른 룩업을 위해)
+        abs_path_dict = {}
+        for rel_path_str, item in item_dict.items():
+            metadata = item.data(ITEM_DATA_ROLE)
+            if isinstance(metadata, dict) and 'abs_path' in metadata:
+                abs_path_dict[metadata['abs_path']] = item
+        
+        # 이전에 체크되었던 각 경로에 대해 복원 시도
+        for checked_path in previous_checked_items:
+            abs_path = Path(checked_path)
+            found_item = None
+            
+            # 1. 절대 경로로 직접 찾기 (가장 확실한 방법)
+            abs_path_str = str(abs_path)
+            if abs_path_str in abs_path_dict:
+                found_item = abs_path_dict[abs_path_str]
+                logger.debug(f"체크 상태 복원 (절대 경로): {abs_path_str}")
+            else:
+                # 2. 상대 경로로 변환하여 찾기
+                try:
+                    if self.current_folder and abs_path.is_absolute():
+                        rel_path = abs_path.relative_to(self.current_folder)
+                        rel_path_str = str(rel_path)
+                        
+                        # 상대 경로가 '.'인 경우 (루트 폴더)
+                        if rel_path_str == '.' and '.' in item_dict:
+                            found_item = item_dict['.']
+                            logger.debug(f"체크 상태 복원 (루트): {abs_path_str}")
+                        elif rel_path_str in item_dict:
+                            found_item = item_dict[rel_path_str]
+                            logger.debug(f"체크 상태 복원 (상대 경로): {rel_path_str}")
+                except ValueError:
+                    # 상대 경로 계산 실패 (다른 폴더의 경로인 경우)
+                    continue
+            
+            # 아이템을 찾았다면 체크 상태 복원
+            if found_item and found_item.isCheckable():
+                found_item.setCheckState(Qt.Checked)
+                restored_count += 1
+        
+        # 부모 폴더들의 체크 상태 업데이트 (체크된 파일들을 기반으로)
+        self._update_parent_states_after_restore(item_dict)
+        
+        # 체크 통계 재계산
+        self._update_check_stats()
+        
+        logger.debug(f"체크 상태 복원 완료: {restored_count}개 항목 복원됨")
+    
+    def _update_parent_states_after_restore(self, item_dict: Dict[str, QStandardItem]):
+        """
+        체크 상태 복원 후 부모 폴더들의 상태 업데이트
+        
+        Args:
+            item_dict: 경로를 키로 하는 아이템 사전
+        """
+        # 모든 체크된 파일들에 대해 부모 상태 업데이트
+        for path_str in self.checked_items:
+            path = Path(path_str)
+            if path.is_file():
+                # 상대 경로로 변환하여 아이템 찾기
+                try:
+                    if self.current_folder and path.is_absolute():
+                        rel_path = path.relative_to(self.current_folder)
+                    else:
+                        rel_path = path
+                    
+                    rel_path_str = str(rel_path)
+                    if rel_path_str in item_dict:
+                        item = item_dict[rel_path_str]
+                        if item:
+                            # 해당 파일 아이템의 모든 부모 폴더를 부분 체크 상태로 설정
+                            parent = item.parent()
+                            while parent:
+                                if parent.checkState() != Qt.PartiallyChecked:
+                                    parent.setCheckState(Qt.PartiallyChecked)
+                                parent = parent.parent()
+                except ValueError:
+                    # 상대 경로 계산 실패 시 무시
+                    continue
     
     def handle_item_change(self, item):
         """
@@ -312,15 +421,15 @@ class FileTreeController(QObject):
         if not self.current_folder or not item.isCheckable():
             return
         
+        # 이벤트 처리 중 플래그 확인 - 최우선 체크
+        if hasattr(self, '_processing_check_event') and self._processing_check_event:
+            return
+        
         # 체크 상태가 변경된 경우에만 처리
         checked = item.checkState() == Qt.Checked
         item_path = self._get_item_path(item)
         
         if not item_path:
-            return
-        
-        # 이벤트 처리 중 플래그 설정
-        if hasattr(self, '_processing_check_event') and self._processing_check_event:
             return
         
         self._processing_check_event = True
@@ -853,4 +962,52 @@ class FileTreeController(QObject):
         grandparent_item.appendRow(parent_item)
         item_dict[str(parent_path)] = parent_item
         
-        return parent_item 
+        return parent_item
+
+    def _handle_collapsed(self, index):
+        """
+        트리 항목 축소 시 호출되는 핸들러
+        루트 항목 축소 시 추가 제어 수행
+        """
+        # 현재 체크 상태 백업
+        self._state_backup['checked_items'] = self.checked_items.copy()
+        self._state_backup['checked_files'] = self.checked_files
+        self._state_backup['checked_dirs'] = self.checked_dirs
+        
+        logger.debug(f"폴더 축소 - 상태 백업: 파일 {self.checked_files}개, 폴더 {self.checked_dirs}개")
+        
+        # 폴더 축소 시 체크 상태 변경 방지를 위해 이벤트 처리 플래그 설정
+        self._processing_check_event = True
+        try:
+            # 시그널 일시 해제
+            self.tree_model.itemChanged.disconnect(self.handle_item_change)
+        except Exception:
+            pass
+
+    def _handle_expanded(self, index):
+        """
+        트리 항목 확장 시 호출되는 핸들러
+        루트 항목 확장 시 추가 제어 수행
+        """
+        # 폴더 확장 시 백업된 상태 복원 후 시그널 다시 연결
+        QTimer.singleShot(50, self._restore_state_and_reconnect)
+    
+    def _restore_state_and_reconnect(self):
+        """
+        백업된 상태를 복원하고 시그널을 다시 연결
+        """
+        # 백업된 상태 복원
+        if self._state_backup['checked_items']:
+            self.checked_items = self._state_backup['checked_items'].copy()
+            self.checked_files = self._state_backup['checked_files']
+            self.checked_dirs = self._state_backup['checked_dirs']
+            
+            logger.debug(f"폴더 확장 - 상태 복원: 파일 {self.checked_files}개, 폴더 {self.checked_dirs}개")
+        
+        # 시그널 다시 연결
+        try:
+            self.tree_model.itemChanged.connect(self.handle_item_change)
+        except Exception:
+            pass
+        finally:
+            self._processing_check_event = False 

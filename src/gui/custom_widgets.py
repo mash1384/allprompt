@@ -153,7 +153,76 @@ class CustomTreeView(QTreeView):
         self._hard_block_timer = QTimer(self)
         self._hard_block_timer.setSingleShot(True)
         self._hard_block_timer.timeout.connect(self._reset_hard_block)
+        
+        # 체크 상태 복원을 위한 임시 저장소
+        self._check_states = {}
+        
+        # FileTreeController 참조 (나중에 설정됨)
+        self._controller = None
     
+    def set_controller(self, controller):
+        """
+        FileTreeController 참조 설정
+        
+        Args:
+            controller: FileTreeController 인스턴스
+        """
+        self._controller = controller
+    
+    def _save_check_states(self, index):
+        """
+        지정된 인덱스의 아이템과 모든 하위 아이템의 체크 상태를 저장
+        
+        Args:
+            index: 저장할 아이템의 모델 인덱스
+        """
+        model = self.model()
+        if not model:
+            return
+            
+        item = model.itemFromIndex(index)
+        if not item:
+            return
+            
+        # 현재 아이템의 체크 상태 저장
+        if item.isCheckable():
+            metadata = item.data(ITEM_DATA_ROLE)
+            if isinstance(metadata, dict) and 'abs_path' in metadata:
+                self._check_states[metadata['abs_path']] = item.checkState()
+        
+        # 모든 자식 아이템의 체크 상태 저장
+        for row in range(item.rowCount()):
+            child_index = model.index(row, 0, index)
+            self._save_check_states(child_index)
+    
+    def _restore_check_states(self, index):
+        """
+        지정된 인덱스의 아이템과 모든 하위 아이템의 체크 상태를 복원
+        
+        Args:
+            index: 복원할 아이템의 모델 인덱스
+        """
+        model = self.model()
+        if not model:
+            return
+            
+        item = model.itemFromIndex(index)
+        if not item:
+            return
+            
+        # 현재 아이템의 체크 상태 복원
+        if item.isCheckable():
+            metadata = item.data(ITEM_DATA_ROLE)
+            if isinstance(metadata, dict) and 'abs_path' in metadata:
+                saved_state = self._check_states.get(metadata['abs_path'])
+                if saved_state is not None:
+                    item.setCheckState(saved_state)
+        
+        # 모든 자식 아이템의 체크 상태 복원
+        for row in range(item.rowCount()):
+            child_index = model.index(row, 0, index)
+            self._restore_check_states(child_index)
+
     def _reset_hard_block(self):
         """하드 블로킹 모드 해제"""
         logger.debug("하드 블로킹 모드 해제")
@@ -361,6 +430,13 @@ class CustomTreeView(QTreeView):
         if index.isValid() and not index.parent().isValid() and self._hard_event_block:
             logger.debug("루트 항목 확장 이벤트 - 하드 블로킹으로 인한 무시")
             return
+            
+        # 컨트롤러가 설정되어 있으면 컨트롤러의 메서드 호출
+        if self._controller and hasattr(self._controller, '_handle_expanded'):
+            self._controller._handle_expanded(index)
+        else:
+            # 기존 방식으로 체크 상태 복원
+            QTimer.singleShot(0, lambda: self._restore_check_states(index))
     
     def _handle_collapsed(self, index):
         """
@@ -371,6 +447,13 @@ class CustomTreeView(QTreeView):
         if index.isValid() and not index.parent().isValid() and self._hard_event_block:
             logger.debug("루트 항목 축소 이벤트 - 하드 블로킹으로 인한 무시")
             return
+            
+        # 컨트롤러가 설정되어 있으면 컨트롤러의 메서드 호출
+        if self._controller and hasattr(self._controller, '_handle_collapsed'):
+            self._controller._handle_collapsed(index)
+        else:
+            # 기존 방식으로 체크 상태 저장
+            self._save_check_states(index)
 
     def _setExpanded(self, index, expanded):
         """
