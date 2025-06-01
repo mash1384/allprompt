@@ -20,4 +20,4 @@ root_path = src_path.parent
 if str(root_path) not in sys.path:
     sys.path.insert(0, str(root_path))
 
-__version__ = "0.1.0" 
+__version__ = "0.1.1" 
