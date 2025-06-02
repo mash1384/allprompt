@@ -28,7 +28,7 @@ Download from [GitHub Releases](https://github.com/mash1384/allprompt/releases):
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/allprompt.git
+git clone https://github.com/mash1384/allprompt.git
 cd allprompt
 
 # 2. Create and activate virtual environment
